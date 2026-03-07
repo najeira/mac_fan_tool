@@ -18,8 +18,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
 
-    expect(find.text('Overview'), findsOneWidget);
-    expect(find.text('CPU Avg'), findsOneWidget);
-    expect(find.text('Thermal Trend'), findsOneWidget);
+    expect(find.text('Preparing hardware monitor'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }

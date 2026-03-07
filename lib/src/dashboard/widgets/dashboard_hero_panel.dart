@@ -16,7 +16,6 @@ class DashboardHeroPanel extends ConsumerWidget {
     final snapshot = ref.watch(monitorSnapshotProvider);
     final summary = ref.watch(dashboardSummaryProvider);
     final isRefreshing = ref.watch(monitorIsRefreshingProvider);
-    final isBootstrapping = ref.watch(monitorIsBootstrappingProvider);
     final foreground = Theme.of(context).colorScheme.onPrimary;
 
     return Container(
@@ -73,14 +72,6 @@ class DashboardHeroPanel extends ConsumerWidget {
               ),
             ],
           ),
-          if (isBootstrapping)
-            Padding(
-              padding: const EdgeInsets.only(top: 22),
-              child: const LinearProgressIndicator(
-                minHeight: 5,
-                backgroundColor: Color(0x401A3038),
-              ),
-            ),
         ],
       ),
     );

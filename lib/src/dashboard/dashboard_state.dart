@@ -77,6 +77,17 @@ final monitorActiveFanCommandIdProvider = Provider<String?>((ref) {
   );
 });
 
+final monitorHasInitialSnapshotProvider = Provider<bool>((ref) {
+  final snapshot = ref.watch(monitorSnapshotProvider);
+  return (snapshot.capturedAtEpochMs ?? 0) > 0;
+});
+
+final dashboardShowLoadingPanelProvider = Provider<bool>((ref) {
+  final isBootstrapping = ref.watch(monitorIsBootstrappingProvider);
+  final hasSnapshot = ref.watch(monitorHasInitialSnapshotProvider);
+  return isBootstrapping || !hasSnapshot;
+});
+
 final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
   final snapshot = ref.watch(monitorSnapshotProvider);
   return DashboardSummary.fromSnapshot(snapshot);

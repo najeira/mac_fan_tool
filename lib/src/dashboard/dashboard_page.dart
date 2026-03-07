@@ -10,6 +10,7 @@ import 'package:mac_fan_tool/src/dashboard/views/overview_view.dart';
 import 'package:mac_fan_tool/src/dashboard/views/system_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_hero_panel.dart';
+import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_loading_panel.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -48,6 +49,8 @@ class _DashboardLayout extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final showLoadingPanel = ref.watch(dashboardShowLoadingPanelProvider);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1180;
@@ -55,12 +58,18 @@ class _DashboardLayout extends ConsumerWidget {
           overrides: [dashboardIsWideProvider.overrideWithValue(isWide)],
           child: ListView(
             padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
-            children: const [
-              DashboardDebugPanel(),
-              DashboardHeroPanel(),
-              _DashboardStatusBanners(),
-              SizedBox(height: 26),
-              _DashboardBody(),
+            children: [
+              const DashboardDebugPanel(),
+              if (showLoadingPanel) ...const [
+                _DashboardStatusBanners(),
+                SizedBox(height: 26),
+                DashboardLoadingPanel(),
+              ] else ...const [
+                DashboardHeroPanel(),
+                _DashboardStatusBanners(),
+                SizedBox(height: 26),
+                _DashboardBody(),
+              ],
             ],
           ),
         );
