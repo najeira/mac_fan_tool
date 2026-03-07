@@ -152,6 +152,7 @@ class LegendChip extends StatelessWidget {
 class PillChip extends StatelessWidget {
   const PillChip({
     super.key,
+    required this.icon,
     required this.label,
     required this.color,
     required this.foreground,
@@ -160,6 +161,7 @@ class PillChip extends StatelessWidget {
   final String label;
   final Color color;
   final Color foreground;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -169,12 +171,19 @@ class PillChip extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: foreground),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

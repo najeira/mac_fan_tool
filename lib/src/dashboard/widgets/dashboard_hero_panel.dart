@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
@@ -13,10 +14,12 @@ class HeroPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final snapshot = ref.watch(monitorSnapshotProvider);
     final summary = ref.watch(summaryProvider);
+    final fanSummary = ref.watch(fanSummaryProvider);
     final isRefreshing = ref.watch(monitorIsRefreshingProvider);
-    final foreground = Theme.of(context).colorScheme.onPrimary;
 
     return Container(
       padding: const EdgeInsets.all(28),
@@ -43,8 +46,10 @@ class HeroPanel extends ConsumerWidget {
                     ? null
                     : () => ref.monitorActions.refresh(),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFDBE9EB),
-                  foregroundColor: const Color(0xFF0F1D24),
+                  // backgroundColor: const Color(0xFFDBE9EB),
+                  // disabledBackgroundColor: const Color(0xFFDBE9EB),
+                  foregroundColor: colorScheme.onSurface,
+                  disabledForegroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 18,
@@ -61,14 +66,16 @@ class HeroPanel extends ConsumerWidget {
             runSpacing: 10,
             children: [
               PillChip(
-                label: compositeChipLabel(summary.overallTemperature),
+                icon: Icons.device_thermostat,
+                label: formatTemperature(summary.overallTemperature),
                 color: thermalChipColor(snapshot.thermalLevel),
-                foreground: foreground,
+                foreground: colorScheme.onPrimary,
               ),
               PillChip(
-                label: thermalLabel(snapshot.thermalLevel),
-                color: thermalChipColor(snapshot.thermalLevel),
-                foreground: foreground,
+                icon: Icons.wind_power,
+                label: formatFanSummary(fanSummary),
+                color: fanSummaryChipColor(fanSummary),
+                foreground: colorScheme.onPrimary,
               ),
             ],
           ),

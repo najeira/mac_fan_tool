@@ -93,6 +93,15 @@ final summaryProvider = Provider<DashboardSummary>((ref) {
   return DashboardSummary.fromSnapshot(snapshot);
 });
 
+final fanSummaryProvider = Provider<FanSummary?>((ref) {
+  final snapshot = ref.watch(monitorSnapshotProvider);
+  if (snapshot.fanReadings.isEmpty) {
+    return null;
+  }
+
+  return FanSummary.fromFans(snapshot.fanReadings);
+});
+
 final hardwareNoteProvider = Provider<String?>((ref) {
   final debugFlags = ref.watch(debugFlagsProvider);
   if (debugFlags.showHardwareNote) {

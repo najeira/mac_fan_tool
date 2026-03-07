@@ -88,3 +88,40 @@ class DashboardSummary {
   final int ambientSensorCount;
   final String overallCaption;
 }
+
+class FanSummary {
+  const FanSummary({
+    required this.fanCount,
+    required this.averageRpm,
+    required this.peakRpm,
+    required this.manualCount,
+  });
+
+  factory FanSummary.fromFans(List<FanReadingData> fans) {
+    var totalRpm = 0;
+    var peakRpm = 0;
+    var manualCount = 0;
+
+    for (final fan in fans) {
+      totalRpm += fan.safeCurrentRpm;
+      if (fan.safeCurrentRpm > peakRpm) {
+        peakRpm = fan.safeCurrentRpm;
+      }
+      if (fan.normalizedMode == FanModeData.manual) {
+        manualCount += 1;
+      }
+    }
+
+    return FanSummary(
+      fanCount: fans.length,
+      averageRpm: (totalRpm / fans.length).round(),
+      peakRpm: peakRpm,
+      manualCount: manualCount,
+    );
+  }
+
+  final int fanCount;
+  final int averageRpm;
+  final int peakRpm;
+  final int manualCount;
+}

@@ -2,24 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
+import 'dashboard_summary.dart';
+
 String? hardwareNote(MonitorState state) {
   return state.snapshot.note ?? state.capabilities.note ?? state.device.note;
-}
-
-String thermalLabel(ThermalStateData? level) {
-  switch (level) {
-    case ThermalStateData.nominal:
-      return 'Thermal nominal';
-    case ThermalStateData.fair:
-      return 'Thermal fair';
-    case ThermalStateData.serious:
-      return 'Thermal serious';
-    case ThermalStateData.critical:
-      return 'Thermal critical';
-    case ThermalStateData.unknown:
-    case null:
-      return 'Thermal unknown';
-  }
 }
 
 Color thermalChipColor(ThermalStateData? level) {
@@ -38,16 +24,9 @@ Color thermalChipColor(ThermalStateData? level) {
   }
 }
 
-String compositeChipLabel(double? overallTemperature) {
-  if (overallTemperature == null) {
-    return '...';
-  }
-  return formatTemperature(overallTemperature);
-}
-
 String formatTemperature(double? value) {
   if (value == null) {
-    return 'Unavailable';
+    return ' - ';
   }
   return '${value.toStringAsFixed(1)} °C';
 }
@@ -83,6 +62,23 @@ String formatSampleTime(DateTime capturedAt) {
   final minute = capturedAt.minute.toString().padLeft(2, '0');
   final second = capturedAt.second.toString().padLeft(2, '0');
   return '$hour:$minute:$second';
+}
+
+String formatFanSummary(FanSummary? summary) {
+  if (summary == null) {
+    return 'Fan - ';
+  }
+  if (summary.fanCount == 1) {
+    return 'Fan ${summary.averageRpm} rpm';
+  }
+  return '${summary.fanCount} fans avg ${summary.averageRpm} RPM';
+}
+
+Color fanSummaryChipColor(FanSummary? summary) {
+  if (summary?.manualCount == 0) {
+    return const Color(0xFF2E6B5F);
+  }
+  return const Color(0xFF7A5134);
 }
 
 Color sensorColor(SensorKindData? kind) {
