@@ -1,29 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class DetailsView extends StatelessWidget {
-  const DetailsView({
-    super.key,
-    required this.state,
-    required this.summary,
-    required this.isWide,
-  });
+class DetailsView extends ConsumerWidget {
+  const DetailsView({super.key, required this.isWide});
 
-  final MonitorState state;
-  final DashboardSummary summary;
   final bool isWide;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final snapshot = ref.watch(monitorSnapshotProvider);
+    final summary = ref.watch(dashboardSummaryProvider);
+
     final cpuPanel = _SensorGroupPanel(
       title: 'CPU Channels',
       subtitle:
           'Individual CPU-related temperature channels. Average ${formatTemperature(summary.cpuAverage)}.',
-      sensors: cpuSensors(state.snapshot.sensorReadings),
+      sensors: cpuSensors(snapshot.sensorReadings),
       emptyMessage:
           'No CPU temperature channels are available from the bridge.',
       emptyIcon: Icons.memory_outlined,
@@ -33,7 +30,7 @@ class DetailsView extends StatelessWidget {
       title: 'GPU Channels',
       subtitle:
           'Individual GPU-related temperature channels. Average ${formatTemperature(summary.gpuAverage)}.',
-      sensors: gpuSensors(state.snapshot.sensorReadings),
+      sensors: gpuSensors(snapshot.sensorReadings),
       emptyMessage:
           'No GPU temperature channels are available from the bridge.',
       emptyIcon: Icons.graphic_eq_outlined,
@@ -43,7 +40,7 @@ class DetailsView extends StatelessWidget {
       title: 'Supporting Thermals',
       subtitle:
           'Memory, storage, power, ambient, and other supporting temperature channels.',
-      sensors: supportingSensors(state.snapshot.sensorReadings),
+      sensors: supportingSensors(snapshot.sensorReadings),
       emptyMessage:
           'No supporting thermal channels are available from the bridge.',
       emptyIcon: Icons.developer_board_outlined,

@@ -2,26 +2,25 @@ import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class OverviewView extends StatelessWidget {
-  const OverviewView({
-    super.key,
-    required this.state,
-    required this.summary,
-    required this.isWide,
-  });
+class OverviewView extends ConsumerWidget {
+  const OverviewView({super.key, required this.isWide});
 
-  final MonitorState state;
-  final DashboardSummary summary;
   final bool isWide;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final snapshot = ref.watch(monitorSnapshotProvider);
+    final history = ref.watch(monitorHistoryProvider);
+    final summary = ref.watch(dashboardSummaryProvider);
+
     final cards = [
       MetricCard(
         label: 'CPU Avg',
@@ -50,12 +49,12 @@ class OverviewView extends StatelessWidget {
       ),
       MetricCard(
         label: 'Last Sample',
-        value: sampleAge(state.snapshot.capturedAt),
-        caption: 'Updated ${formatSampleTime(state.snapshot.capturedAt)}',
+        value: sampleAge(snapshot.capturedAt),
+        caption: 'Updated ${formatSampleTime(snapshot.capturedAt)}',
       ),
     ];
 
-    final trendPanel = _ThermalTrendPanel(state: state);
+    final trendPanel = _ThermalTrendPanel(history: history);
     final breakdownPanel = _CategoryBreakdownPanel(summary: summary);
 
     return Column(
@@ -83,15 +82,14 @@ class OverviewView extends StatelessWidget {
 }
 
 class _ThermalTrendPanel extends StatelessWidget {
-  const _ThermalTrendPanel({required this.state});
+  const _ThermalTrendPanel({required this.history});
 
-  final MonitorState state;
+  final List<HardwareSnapshotData> history;
 
   @override
   Widget build(BuildContext context) {
     final summaries = [
-      for (final snapshot in state.history)
-        DashboardSummary.fromSnapshot(snapshot),
+      for (final snapshot in history) DashboardSummary.fromSnapshot(snapshot),
     ];
     final series = _buildTrendSeries(summaries);
 

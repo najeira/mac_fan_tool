@@ -1,29 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
+import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class DashboardHeroPanel extends StatelessWidget {
-  const DashboardHeroPanel({
-    super.key,
-    required this.state,
-    required this.summary,
-    required this.selectedView,
-    required this.onViewSelected,
-    required this.onRefresh,
-  });
-
-  final MonitorState state;
-  final DashboardSummary summary;
-  final DashboardView selectedView;
-  final ValueChanged<DashboardView> onViewSelected;
-  final VoidCallback? onRefresh;
+class DashboardHeroPanel extends ConsumerWidget {
+  const DashboardHeroPanel({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final snapshot = ref.watch(monitorSnapshotProvider);
+    final summary = ref.watch(dashboardSummaryProvider);
+    final isRefreshing = ref.watch(monitorIsRefreshingProvider);
+    final isBootstrapping = ref.watch(monitorIsBootstrappingProvider);
+    final controller = ref.read(monitorControllerProvider.notifier);
     final foreground = Theme.of(context).colorScheme.onPrimary;
 
     return Container(
@@ -44,13 +38,10 @@ class DashboardHeroPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              _DashboardViewSwitcher(
-                selectedView: selectedView,
-                onViewSelected: onViewSelected,
-              ),
+              const _DashboardViewSwitcher(),
               const Spacer(),
               FilledButton.icon(
-                onPressed: onRefresh,
+                onPressed: isRefreshing ? null : () => controller.refresh(),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFDBE9EB),
                   foregroundColor: const Color(0xFF0F1D24),
@@ -59,8 +50,8 @@ class DashboardHeroPanel extends StatelessWidget {
                     vertical: 18,
                   ),
                 ),
-                icon: Icon(state.isRefreshing ? Icons.sync : Icons.refresh),
-                label: Text(state.isRefreshing ? 'Refreshing' : 'Refresh'),
+                icon: Icon(isRefreshing ? Icons.sync : Icons.refresh),
+                label: Text(isRefreshing ? 'Refreshing' : 'Refresh'),
               ),
             ],
           ),
@@ -71,33 +62,37 @@ class DashboardHeroPanel extends StatelessWidget {
             children: [
               PillChip(
                 label: compositeChipLabel(summary.overallTemperature),
-                color: thermalChipColor(state.snapshot.thermalLevel),
+                color: thermalChipColor(snapshot.thermalLevel),
                 foreground: foreground,
               ),
               PillChip(
-                label: thermalLabel(state.snapshot.thermalLevel),
-                color: thermalChipColor(state.snapshot.thermalLevel),
+                label: thermalLabel(snapshot.thermalLevel),
+                color: thermalChipColor(snapshot.thermalLevel),
                 foreground: foreground,
               ),
             ],
           ),
+          if (isBootstrapping) ...[
+            const SizedBox(height: 22),
+            const LinearProgressIndicator(
+              minHeight: 5,
+              backgroundColor: Color(0x401A3038),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _DashboardViewSwitcher extends StatelessWidget {
-  const _DashboardViewSwitcher({
-    required this.selectedView,
-    required this.onViewSelected,
-  });
-
-  final DashboardView selectedView;
-  final ValueChanged<DashboardView> onViewSelected;
+class _DashboardViewSwitcher extends ConsumerWidget {
+  const _DashboardViewSwitcher();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedView = ref.watch(dashboardViewProvider);
+    final controller = ref.read(dashboardViewProvider.notifier);
+
     return SegmentedButton<DashboardView>(
       segments: const [
         ButtonSegment<DashboardView>(
@@ -141,7 +136,7 @@ class _DashboardViewSwitcher extends StatelessWidget {
       ),
       onSelectionChanged: (selection) {
         if (selection.isNotEmpty) {
-          onViewSelected(selection.first);
+          controller.setView(selection.first);
         }
       },
     );

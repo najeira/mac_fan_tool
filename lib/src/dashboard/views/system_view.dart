@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/fan_control_card.dart';
@@ -8,23 +9,14 @@ import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class SystemView extends StatelessWidget {
-  const SystemView({
-    super.key,
-    required this.state,
-    required this.summary,
-    required this.controller,
-    required this.isWide,
-  });
+  const SystemView({super.key, required this.isWide});
 
-  final MonitorState state;
-  final DashboardSummary summary;
-  final MonitorController controller;
   final bool isWide;
 
   @override
   Widget build(BuildContext context) {
-    final infoPanel = _SystemInfoPanel(state: state, summary: summary);
-    final fansPanel = _FansPanel(state: state, controller: controller);
+    const infoPanel = _SystemInfoPanel();
+    const fansPanel = _FansPanel();
 
     if (isWide) {
       return Row(
@@ -39,54 +31,54 @@ class SystemView extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [infoPanel, const SizedBox(height: 20), fansPanel],
+      children: const [infoPanel, SizedBox(height: 20), fansPanel],
     );
   }
 }
 
-class _SystemInfoPanel extends StatelessWidget {
-  const _SystemInfoPanel({required this.state, required this.summary});
-
-  final MonitorState state;
-  final DashboardSummary summary;
+class _SystemInfoPanel extends ConsumerWidget {
+  const _SystemInfoPanel();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final device = ref.watch(monitorDeviceProvider);
+    final capabilities = ref.watch(monitorCapabilitiesProvider);
+    final snapshot = ref.watch(monitorSnapshotProvider);
+    final summary = ref.watch(dashboardSummaryProvider);
+
     return SectionPanel(
       title: 'Hardware Bridge',
       subtitle:
           'Device identity, backend status, and the amount of data currently visible to the dashboard.',
       child: Column(
         children: [
-          KeyValueRow(label: 'Computer', value: state.device.computerName),
+          KeyValueRow(label: 'Computer', value: device.computerName),
           const Divider(height: 24),
-          KeyValueRow(label: 'Model', value: state.device.model),
+          KeyValueRow(label: 'Model', value: device.model),
           const Divider(height: 24),
-          KeyValueRow(label: 'Architecture', value: state.device.architecture),
+          KeyValueRow(label: 'Architecture', value: device.architecture),
           const Divider(height: 24),
-          KeyValueRow(label: 'macOS Release', value: state.device.osVersion),
+          KeyValueRow(label: 'macOS Release', value: device.osVersion),
           const Divider(height: 24),
-          KeyValueRow(label: 'Backend', value: state.capabilities.backendLabel),
+          KeyValueRow(label: 'Backend', value: capabilities.backendLabel),
           const Divider(height: 24),
           KeyValueRow(
             label: 'Raw Sensors',
-            value: state.capabilities.rawSensorsEnabled
+            value: capabilities.rawSensorsEnabled
                 ? '${summary.sensorCount} channels'
                 : 'Not available yet',
           ),
           const Divider(height: 24),
           KeyValueRow(
             label: 'Fans',
-            value: state.capabilities.fanTelemetryAvailable
-                ? '${state.snapshot.fanReadings.length} reported'
+            value: capabilities.fanTelemetryAvailable
+                ? '${snapshot.fanReadings.length} reported'
                 : 'Unavailable',
           ),
           const Divider(height: 24),
           KeyValueRow(
             label: 'Fan Control',
-            value: state.capabilities.fanControlEnabled
-                ? 'Writable'
-                : 'Read only',
+            value: capabilities.fanControlEnabled ? 'Writable' : 'Read only',
           ),
           const Divider(height: 24),
           KeyValueRow(
@@ -99,18 +91,20 @@ class _SystemInfoPanel extends StatelessWidget {
   }
 }
 
-class _FansPanel extends StatelessWidget {
-  const _FansPanel({required this.state, required this.controller});
-
-  final MonitorState state;
-  final MonitorController controller;
+class _FansPanel extends ConsumerWidget {
+  const _FansPanel();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final snapshot = ref.watch(monitorSnapshotProvider);
+    final capabilities = ref.watch(monitorCapabilitiesProvider);
+    final activeFanCommandId = ref.watch(monitorActiveFanCommandIdProvider);
+    final controller = ref.read(monitorControllerProvider.notifier);
+
     return SectionPanel(
       title: 'Fans',
       subtitle: 'Current fan telemetry and manual RPM controls.',
-      child: state.snapshot.fanReadings.isEmpty
+      child: snapshot.fanReadings.isEmpty
           ? const EmptyPanel(
               icon: Icons.wind_power,
               message:
@@ -118,16 +112,16 @@ class _FansPanel extends StatelessWidget {
             )
           : Column(
               children: [
-                for (final fan in state.snapshot.fanReadings) ...[
+                for (final fan in snapshot.fanReadings) ...[
                   FanControlCard(
                     fan: fan,
-                    canControl: state.capabilities.fanControlEnabled,
-                    isBusy: state.activeFanCommandId == fan.stableId,
+                    canControl: capabilities.fanControlEnabled,
+                    isBusy: activeFanCommandId == fan.stableId,
                     onAutomatic: () => controller.setFanAutomatic(fan),
                     onManualTargetSelected: (targetRpm) =>
                         controller.setFanTargetRpm(fan, targetRpm),
                   ),
-                  if (fan != state.snapshot.fanReadings.last)
+                  if (fan != snapshot.fanReadings.last)
                     const SizedBox(height: 16),
                 ],
               ],

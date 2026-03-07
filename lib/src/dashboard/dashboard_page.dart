@@ -2,33 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:macos_ui/macos_ui.dart';
 
-import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
-import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/views/details_view.dart';
 import 'package:mac_fan_tool/src/dashboard/views/overview_view.dart';
 import 'package:mac_fan_tool/src/dashboard/views/system_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_hero_panel.dart';
-import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
-import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class DashboardPage extends ConsumerStatefulWidget {
+class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
   @override
-  ConsumerState<DashboardPage> createState() => _DashboardPageState();
-}
-
-class _DashboardPageState extends ConsumerState<DashboardPage> {
-  DashboardView _selectedView = DashboardView.overview;
-
-  @override
   Widget build(BuildContext context) {
-    final state = ref.watch(monitorControllerProvider);
-    final controller = ref.read(monitorControllerProvider.notifier);
-    final summary = DashboardSummary.fromSnapshot(state.snapshot);
-
     return MacosWindow(
       child: Theme(
         data: ThemeData(
@@ -59,45 +45,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        DashboardHeroPanel(
-                          state: state,
-                          summary: summary,
-                          selectedView: _selectedView,
-                          onViewSelected: (view) {
-                            setState(() {
-                              _selectedView = view;
-                            });
-                          },
-                          onRefresh: state.isRefreshing
-                              ? null
-                              : () => controller.refresh(),
-                        ),
-                        if (state.errorMessage != null) ...[
-                          const SizedBox(height: 18),
-                          NoticeBanner(
-                            tone: NoticeTone.error,
-                            message: state.errorMessage!,
-                          ),
-                        ],
-                        if (state.lastCommandMessage != null) ...[
-                          const SizedBox(height: 18),
-                          NoticeBanner(
-                            tone: NoticeTone.success,
-                            message: state.lastCommandMessage!,
-                          ),
-                        ],
-                        if (hardwareNote(state) case final note?) ...[
-                          const SizedBox(height: 18),
-                          NoticeBanner(tone: NoticeTone.info, message: note),
-                        ],
+                        const DashboardHeroPanel(),
+                        const _DashboardStatusBanners(),
                         const SizedBox(height: 26),
-                        _DashboardBody(
-                          view: _selectedView,
-                          state: state,
-                          summary: summary,
-                          controller: controller,
-                          isWide: isWide,
-                        ),
+                        _DashboardBody(isWide: isWide),
                       ],
                     ),
                   );
@@ -111,35 +62,57 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 }
 
-class _DashboardBody extends StatelessWidget {
-  const _DashboardBody({
-    required this.view,
-    required this.state,
-    required this.summary,
-    required this.controller,
-    required this.isWide,
-  });
+class _DashboardBody extends ConsumerWidget {
+  const _DashboardBody({required this.isWide});
 
-  final DashboardView view;
-  final MonitorState state;
-  final DashboardSummary summary;
-  final MonitorController controller;
   final bool isWide;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final view = ref.watch(dashboardViewProvider);
+
     switch (view) {
       case DashboardView.overview:
-        return OverviewView(state: state, summary: summary, isWide: isWide);
+        return OverviewView(isWide: isWide);
       case DashboardView.details:
-        return DetailsView(state: state, summary: summary, isWide: isWide);
+        return DetailsView(isWide: isWide);
       case DashboardView.system:
-        return SystemView(
-          state: state,
-          summary: summary,
-          controller: controller,
-          isWide: isWide,
-        );
+        return SystemView(isWide: isWide);
     }
+  }
+}
+
+class _DashboardStatusBanners extends ConsumerWidget {
+  const _DashboardStatusBanners();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final errorMessage = ref.watch(monitorErrorMessageProvider);
+    final lastCommandMessage = ref.watch(monitorLastCommandMessageProvider);
+    final hardwareNote = ref.watch(dashboardHardwareNoteProvider);
+
+    if (errorMessage == null &&
+        lastCommandMessage == null &&
+        hardwareNote == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (errorMessage != null) ...[
+          const SizedBox(height: 18),
+          NoticeBanner(tone: NoticeTone.error, message: errorMessage),
+        ],
+        if (lastCommandMessage != null) ...[
+          const SizedBox(height: 18),
+          NoticeBanner(tone: NoticeTone.success, message: lastCommandMessage),
+        ],
+        if (hardwareNote != null) ...[
+          const SizedBox(height: 18),
+          NoticeBanner(tone: NoticeTone.info, message: hardwareNote),
+        ],
+      ],
+    );
   }
 }
