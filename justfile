@@ -3,10 +3,13 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 app_name := "MacFanTool"
 app_file := "build/macos/Build/Products/Release/" + app_name + ".app"
-zip_file := app_name + ".zip"
+notary_zip_file := app_name + "-notary.zip"
+release_zip_file := app_name + ".zip"
 frameworks_dir := app_file + "/Contents/Frameworks"
 helper_file := app_file + "/Contents/Library/LaunchServices/FanControlHelper"
 launch_daemon_plist := app_file + "/Contents/Library/LaunchDaemons/FanControlHelper.plist"
+installed_app_file := "/Applications/" + app_name + ".app"
+installed_helper_file := installed_app_file + "/Contents/Library/LaunchServices/FanControlHelper"
 
 default:
   just --list
@@ -41,6 +44,9 @@ show-signing-targets:
   printf 'App: %s\n' "{{app_file}}"
   printf 'Helper: %s\n' "{{helper_file}}"
   printf 'LaunchDaemon: %s\n' "{{launch_daemon_plist}}"
+  printf 'Installed app: %s\n' "{{installed_app_file}}"
+  printf 'Notary ZIP: %s\n' "{{notary_zip_file}}"
+  printf 'Release ZIP: %s\n' "{{release_zip_file}}"
 
 sign-frameworks: build-release check-signing-env
   shopt -s nullglob; for item in "{{frameworks_dir}}"/*.framework "{{frameworks_dir}}"/*.dylib; do echo "Signing nested code: $item"; codesign --force --timestamp --sign "${APPLE_SIGN_NAME}" "$item"; done
@@ -65,16 +71,33 @@ verify-release:
   codesign -d --entitlements - {{app_file}}
   codesign -d --entitlements - {{helper_file}}
 
-zip-release: sign-release verify-release
-  ditto -c -k --sequesterRsrc --keepParent "{{app_file}}" "{{zip_file}}"
+zip-notary: sign-release verify-release
+  rm -f "{{notary_zip_file}}"
+  ditto -c -k --sequesterRsrc --keepParent "{{app_file}}" "{{notary_zip_file}}"
 
-notary-submit: zip-release check-notary-env
-  xcrun notarytool submit "{{zip_file}}" --apple-id "${APPLE_EMAIL_ADDRESS}" --team-id "${APPLE_TEAM_ID}" --password "${APP_SPECIFIC_PASSWORD}" --wait
+notary-submit: zip-notary check-notary-env
+  xcrun notarytool submit "{{notary_zip_file}}" --apple-id "${APPLE_EMAIL_ADDRESS}" --team-id "${APPLE_TEAM_ID}" --password "${APP_SPECIFIC_PASSWORD}" --wait
 
 notary-log submission_id:
   xcrun notarytool log "{{submission_id}}" --apple-id "${APPLE_EMAIL_ADDRESS}" --team-id "${APPLE_TEAM_ID}" --password "${APP_SPECIFIC_PASSWORD}"
 
-staple-release:
+staple-release: notary-submit
   xcrun stapler staple {{app_file}}
 
-dist: notary-submit staple-release
+verify-stapled: staple-release
+  xcrun stapler validate {{app_file}}
+  spctl --assess --verbose {{app_file}}
+
+zip-release: verify-stapled
+  rm -f "{{release_zip_file}}"
+  ditto -c -k --sequesterRsrc --keepParent "{{app_file}}" "{{release_zip_file}}"
+
+install-release:
+  ditto "{{app_file}}" "{{installed_app_file}}"
+
+verify-installed:
+  codesign --verify --deep --strict --verbose=4 "{{installed_app_file}}"
+  codesign --verify --strict --verbose=4 "{{installed_helper_file}}"
+  plutil -p "{{installed_app_file}}/Contents/Library/LaunchDaemons/FanControlHelper.plist"
+
+dist: zip-release
