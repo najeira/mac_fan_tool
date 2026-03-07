@@ -12,38 +12,6 @@ class DetailsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isWide = ref.watch(isWideProvider);
-    final snapshot = ref.watch(monitorSnapshotProvider);
-    final summary = ref.watch(summaryProvider);
-
-    final cpuPanel = _SensorGroupPanel(
-      title: 'CPU Channels',
-      subtitle:
-          'Individual CPU-related temperature channels. Average ${formatTemperature(summary.cpuAverage)}.',
-      sensors: cpuSensors(snapshot.sensorReadings),
-      emptyMessage:
-          'No CPU temperature channels are available from the bridge.',
-      emptyIcon: Icons.memory_outlined,
-    );
-
-    final gpuPanel = _SensorGroupPanel(
-      title: 'GPU Channels',
-      subtitle:
-          'Individual GPU-related temperature channels. Average ${formatTemperature(summary.gpuAverage)}.',
-      sensors: gpuSensors(snapshot.sensorReadings),
-      emptyMessage:
-          'No GPU temperature channels are available from the bridge.',
-      emptyIcon: Icons.graphic_eq_outlined,
-    );
-
-    final supportingPanel = _SensorGroupPanel(
-      title: 'Supporting Thermals',
-      subtitle:
-          'Memory, storage, power, ambient, and other supporting temperature channels.',
-      sensors: supportingSensors(snapshot.sensorReadings),
-      emptyMessage:
-          'No supporting thermal channels are available from the bridge.',
-      emptyIcon: Icons.developer_board_outlined,
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,20 +19,97 @@ class DetailsView extends ConsumerWidget {
         if (isWide)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: cpuPanel),
-              const SizedBox(width: 20),
-              Expanded(child: gpuPanel),
+            children: const [
+              Expanded(child: _CpuSensorPanel()),
+              SizedBox(width: 20),
+              Expanded(child: _GpuSensorPanel()),
+              SizedBox(width: 20),
+              Expanded(child: _SupportingSensorPanel()),
             ],
           )
-        else ...[
-          cpuPanel,
-          const SizedBox(height: 20),
-          gpuPanel,
+        else ...const [
+          _CpuSensorPanel(),
+          SizedBox(height: 20),
+          _GpuSensorPanel(),
+          SizedBox(height: 20),
+          _SupportingSensorPanel(),
         ],
-        const SizedBox(height: 20),
-        supportingPanel,
       ],
+    );
+  }
+}
+
+class _CpuSensorPanel extends ConsumerWidget {
+  const _CpuSensorPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sensors = ref.watch(
+      monitorSnapshotProvider.select(
+        (snapshot) => cpuSensors(snapshot.sensorReadings),
+      ),
+    );
+    final cpuAverage = ref.watch(
+      summaryProvider.select((summary) => summary.cpuAverage),
+    );
+
+    return _SensorGroupPanel(
+      title: 'CPU Channels',
+      subtitle:
+          'Individual CPU-related temperature channels. Average ${formatTemperature(cpuAverage)}.',
+      sensors: sensors,
+      emptyMessage:
+          'No CPU temperature channels are available from the bridge.',
+      emptyIcon: Icons.memory_outlined,
+    );
+  }
+}
+
+class _GpuSensorPanel extends ConsumerWidget {
+  const _GpuSensorPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sensors = ref.watch(
+      monitorSnapshotProvider.select(
+        (snapshot) => gpuSensors(snapshot.sensorReadings),
+      ),
+    );
+    final gpuAverage = ref.watch(
+      summaryProvider.select((summary) => summary.gpuAverage),
+    );
+
+    return _SensorGroupPanel(
+      title: 'GPU Channels',
+      subtitle:
+          'Individual GPU-related temperature channels. Average ${formatTemperature(gpuAverage)}.',
+      sensors: sensors,
+      emptyMessage:
+          'No GPU temperature channels are available from the bridge.',
+      emptyIcon: Icons.graphic_eq_outlined,
+    );
+  }
+}
+
+class _SupportingSensorPanel extends ConsumerWidget {
+  const _SupportingSensorPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sensors = ref.watch(
+      monitorSnapshotProvider.select(
+        (snapshot) => supportingSensors(snapshot.sensorReadings),
+      ),
+    );
+
+    return _SensorGroupPanel(
+      title: 'Supporting Thermals',
+      subtitle:
+          'Memory, storage, power, ambient, and other supporting temperature channels.',
+      sensors: sensors,
+      emptyMessage:
+          'No supporting thermal channels are available from the bridge.',
+      emptyIcon: Icons.developer_board_outlined,
     );
   }
 }

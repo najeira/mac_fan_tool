@@ -15,11 +15,11 @@ final monitorControllerProvider =
 class MonitorController extends Notifier<MonitorState> {
   Timer? _pollTimer;
   bool _refreshInFlight = false;
-  late final HardwareRepository _repository;
+
+  HardwareRepository get _repository => ref.read(hardwareRepositoryProvider);
 
   @override
   MonitorState build() {
-    _repository = ref.read(hardwareRepositoryProvider);
     ref.onDispose(() {
       _pollTimer?.cancel();
     });

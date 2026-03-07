@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
+import 'package:mac_fan_tool/src/dashboard/thermal_trend.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
@@ -100,6 +101,11 @@ final fanSummaryProvider = Provider<FanSummary?>((ref) {
   }
 
   return FanSummary.fromFans(snapshot.fanReadings);
+});
+
+final thermalTrendProvider = Provider<ThermalTrendModel>((ref) {
+  final history = ref.watch(monitorHistoryProvider);
+  return ThermalTrendModel.fromHistory(history);
 });
 
 final hardwareNoteProvider = Provider<String?>((ref) {
