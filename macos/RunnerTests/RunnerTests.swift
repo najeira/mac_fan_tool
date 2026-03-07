@@ -1,5 +1,5 @@
 import XCTest
-@testable import Runner
+@testable import MacFanTool
 
 private let testEnvironment = ResolvedEnvironment(
   configuration: FanControlHelperConfiguration(appBundleIdentifier: "com.example.macFanTool"),
@@ -27,8 +27,8 @@ final class RunnerTests: XCTestCase {
   func testFanControlWriteResultValidatorFailsWhenAnyWriteFails() {
     XCTAssertThrowsError(
       try FanControlWriteResultValidator.validate(
-        [.success(()), .failure(.partialFailure)],
-        unavailableError: .unavailable
+        [.success(()), .failure(TestWriteError.partialFailure)],
+        unavailableError: TestWriteError.unavailable
       )
     ) { error in
       XCTAssertEqual(error as? TestWriteError, .partialFailure)
@@ -38,8 +38,8 @@ final class RunnerTests: XCTestCase {
   func testFanControlWriteResultValidatorFailsWhenNoWritePathExists() {
     XCTAssertThrowsError(
       try FanControlWriteResultValidator.validate(
-        [],
-        unavailableError: .unavailable
+        [] as [Result<Void, TestWriteError>],
+        unavailableError: TestWriteError.unavailable
       )
     ) { error in
       XCTAssertEqual(error as? TestWriteError, .unavailable)

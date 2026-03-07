@@ -6,7 +6,7 @@ import IOKit.hidsystem
 
 enum HardwareSensorBridgeSupport {
   static func temperatureValuesForSystemClient(
-    _ systemClient: IOHIDEventSystemClientRef?,
+    _ systemClient: IOHIDEventSystemClient?,
     type: Int32 = kIOHIDEventTypeTemperature
   ) -> [String: Double] {
     let sensors =
