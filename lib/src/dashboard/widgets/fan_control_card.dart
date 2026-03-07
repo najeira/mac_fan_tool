@@ -87,7 +87,7 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
         (capabilities) => capabilities.fanControlEnabled,
       ),
     );
-    final isBusy = ref.watch(monitorActiveFanCommandIdProvider) == fan.stableId;
+    final isBusy = ref.watch(monitorIsFanCommandActiveProvider(widget.fanId));
     final disabled = !canControl || isBusy;
     final span = math.max(1, fan.safeMaximumRpm - fan.safeMinimumRpm);
     final divisions = math.max(1, span ~/ 100);

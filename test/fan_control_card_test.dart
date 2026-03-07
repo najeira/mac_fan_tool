@@ -25,7 +25,9 @@ void main() {
               hasFans: true,
             ),
           ),
-          monitorActiveFanCommandIdProvider.overrideWith((ref) => null),
+          monitorActiveFanCommandIdsProvider.overrideWith(
+            (ref) => const <String>{},
+          ),
         ],
       );
       addTearDown(container.dispose);

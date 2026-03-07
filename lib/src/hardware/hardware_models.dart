@@ -116,10 +116,10 @@ class MonitorState {
     required this.history,
     required this.isBootstrapping,
     required this.isRefreshing,
-    this.activeFanCommandId,
+    Set<String> activeFanCommandIds = const <String>{},
     this.errorMessage,
     this.transientNotice,
-  });
+  }) : activeFanCommandIds = Set.unmodifiable(activeFanCommandIds);
 
   factory MonitorState.initial() {
     return MonitorState(
@@ -142,7 +142,7 @@ class MonitorState {
   final List<HardwareSnapshotData> history;
   final bool isBootstrapping;
   final bool isRefreshing;
-  final String? activeFanCommandId;
+  final Set<String> activeFanCommandIds;
   final String? errorMessage;
   final MonitorNotice? transientNotice;
 
@@ -153,7 +153,7 @@ class MonitorState {
     List<HardwareSnapshotData>? history,
     bool? isBootstrapping,
     bool? isRefreshing,
-    Object? activeFanCommandId = _sentinel,
+    Set<String>? activeFanCommandIds,
     Object? errorMessage = _sentinel,
     Object? transientNotice = _sentinel,
   }) {
@@ -164,9 +164,7 @@ class MonitorState {
       history: history ?? this.history,
       isBootstrapping: isBootstrapping ?? this.isBootstrapping,
       isRefreshing: isRefreshing ?? this.isRefreshing,
-      activeFanCommandId: identical(activeFanCommandId, _sentinel)
-          ? this.activeFanCommandId
-          : activeFanCommandId as String?,
+      activeFanCommandIds: activeFanCommandIds ?? this.activeFanCommandIds,
       errorMessage: identical(errorMessage, _sentinel)
           ? this.errorMessage
           : errorMessage as String?,

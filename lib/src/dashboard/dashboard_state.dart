@@ -76,9 +76,20 @@ final monitorTransientNoticeProvider = Provider<MonitorNotice?>((ref) {
   );
 });
 
-final monitorActiveFanCommandIdProvider = Provider<String?>((ref) {
+final monitorActiveFanCommandIdsProvider = Provider<Set<String>>((ref) {
   return ref.watch(
-    monitorControllerProvider.select((state) => state.activeFanCommandId),
+    monitorControllerProvider.select((state) => state.activeFanCommandIds),
+  );
+});
+
+final monitorIsFanCommandActiveProvider = Provider.family<bool, String>((
+  ref,
+  fanId,
+) {
+  return ref.watch(
+    monitorActiveFanCommandIdsProvider.select((activeFanCommandIds) {
+      return activeFanCommandIds.contains(fanId);
+    }),
   );
 });
 
