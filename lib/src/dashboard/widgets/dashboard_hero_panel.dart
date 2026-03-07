@@ -15,11 +15,30 @@ class HeroPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     final snapshot = ref.watch(monitorSnapshotProvider);
     final summary = ref.watch(summaryProvider);
     final fanSummary = ref.watch(fanSummaryProvider);
     final isRefreshing = ref.watch(monitorIsRefreshingProvider);
+    final refreshButtonStyle = FilledButton.styleFrom(
+      minimumSize: const Size(0, 54),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+      backgroundColor: DashboardColors.heroControlSelected,
+      disabledBackgroundColor: DashboardColors.heroControlIdle,
+      foregroundColor: DashboardColors.heroControlForeground,
+      disabledForegroundColor: Colors.white,
+      side: const BorderSide(color: DashboardColors.heroControlBorder),
+      overlayColor: DashboardColors.heroControlForeground.withValues(
+        alpha: 0.08,
+      ),
+      iconSize: 18,
+    );
 
     return Container(
       padding: const EdgeInsets.all(28),
@@ -45,16 +64,7 @@ class HeroPanel extends ConsumerWidget {
                 onPressed: isRefreshing
                     ? null
                     : () => ref.monitorActions.refresh(),
-                style: FilledButton.styleFrom(
-                  // backgroundColor: const Color(0xFFDBE9EB),
-                  // disabledBackgroundColor: const Color(0xFFDBE9EB),
-                  foregroundColor: colorScheme.onSurface,
-                  disabledForegroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 18,
-                  ),
-                ),
+                style: refreshButtonStyle,
                 icon: Icon(isRefreshing ? Icons.sync : Icons.refresh),
                 label: Text(isRefreshing ? 'Refreshing' : 'Refresh'),
               ),
