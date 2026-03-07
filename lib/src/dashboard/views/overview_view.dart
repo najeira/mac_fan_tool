@@ -199,13 +199,13 @@ class _CategoryBreakdownPanel extends StatelessWidget {
         label: 'CPU',
         value: summary.cpuAverage,
         count: summary.cpuSensorCount,
-        color: sensorColor(SensorKind.cpu),
+        color: sensorColor(SensorKindData.cpu),
       ),
       _SummaryCategory(
         label: 'GPU',
         value: summary.gpuAverage,
         count: summary.gpuSensorCount,
-        color: sensorColor(SensorKind.gpu),
+        color: sensorColor(SensorKindData.gpu),
       ),
       _SummaryCategory(
         label: 'Power',
@@ -223,13 +223,13 @@ class _CategoryBreakdownPanel extends StatelessWidget {
         label: 'Memory',
         value: summary.memoryAverage,
         count: summary.memorySensorCount,
-        color: sensorColor(SensorKind.memory),
+        color: sensorColor(SensorKindData.memory),
       ),
       _SummaryCategory(
         label: 'Ambient',
         value: summary.ambientAverage,
         count: summary.ambientSensorCount,
-        color: sensorColor(SensorKind.ambient),
+        color: sensorColor(SensorKindData.ambient),
       ),
     ];
 

@@ -6,32 +6,34 @@ String? hardwareNote(MonitorState state) {
   return state.snapshot.note ?? state.capabilities.note ?? state.device.note;
 }
 
-String thermalLabel(ThermalStateLevel level) {
+String thermalLabel(ThermalStateData? level) {
   switch (level) {
-    case ThermalStateLevel.nominal:
+    case ThermalStateData.nominal:
       return 'Thermal nominal';
-    case ThermalStateLevel.fair:
+    case ThermalStateData.fair:
       return 'Thermal fair';
-    case ThermalStateLevel.serious:
+    case ThermalStateData.serious:
       return 'Thermal serious';
-    case ThermalStateLevel.critical:
+    case ThermalStateData.critical:
       return 'Thermal critical';
-    case ThermalStateLevel.unknown:
+    case ThermalStateData.unknown:
+    case null:
       return 'Thermal unknown';
   }
 }
 
-Color thermalChipColor(ThermalStateLevel level) {
+Color thermalChipColor(ThermalStateData? level) {
   switch (level) {
-    case ThermalStateLevel.nominal:
+    case ThermalStateData.nominal:
       return const Color(0xFF1E6A5C);
-    case ThermalStateLevel.fair:
+    case ThermalStateData.fair:
       return const Color(0xFF866225);
-    case ThermalStateLevel.serious:
+    case ThermalStateData.serious:
       return const Color(0xFF9B5B26);
-    case ThermalStateLevel.critical:
+    case ThermalStateData.critical:
       return const Color(0xFF8F3F3D);
-    case ThermalStateLevel.unknown:
+    case ThermalStateData.unknown:
+    case null:
       return const Color(0xFF4B5D66);
   }
 }
@@ -83,60 +85,61 @@ String formatSampleTime(DateTime capturedAt) {
   return '$hour:$minute:$second';
 }
 
-Color sensorColor(SensorKind kind) {
+Color sensorColor(SensorKindData? kind) {
   switch (kind) {
-    case SensorKind.cpu:
+    case SensorKindData.cpu:
       return const Color(0xFF2C8C7A);
-    case SensorKind.gpu:
+    case SensorKindData.gpu:
       return const Color(0xFF9B5B26);
-    case SensorKind.memory:
+    case SensorKindData.memory:
       return const Color(0xFF5D6AC3);
-    case SensorKind.ambient:
+    case SensorKindData.ambient:
       return const Color(0xFF6A6B3F);
-    case SensorKind.other:
+    case SensorKindData.other:
+    case null:
       return const Color(0xFF5D7078);
   }
 }
 
-List<SensorReading> cpuSensors(List<SensorReading> sensors) {
+List<SensorReadingData> cpuSensors(List<SensorReadingData> sensors) {
   return [
     for (final sensor in sensors)
-      if (sensor.kind == SensorKind.cpu) sensor,
+      if (sensor.normalizedKind == SensorKindData.cpu) sensor,
   ];
 }
 
-List<SensorReading> gpuSensors(List<SensorReading> sensors) {
+List<SensorReadingData> gpuSensors(List<SensorReadingData> sensors) {
   return [
     for (final sensor in sensors)
-      if (sensor.kind == SensorKind.gpu) sensor,
+      if (sensor.normalizedKind == SensorKindData.gpu) sensor,
   ];
 }
 
-List<SensorReading> memorySensors(List<SensorReading> sensors) {
+List<SensorReadingData> memorySensors(List<SensorReadingData> sensors) {
   return [
     for (final sensor in sensors)
-      if (sensor.kind == SensorKind.memory) sensor,
+      if (sensor.normalizedKind == SensorKindData.memory) sensor,
   ];
 }
 
-List<SensorReading> ambientSensors(List<SensorReading> sensors) {
+List<SensorReadingData> ambientSensors(List<SensorReadingData> sensors) {
   return [
     for (final sensor in sensors)
-      if (sensor.kind == SensorKind.ambient) sensor,
+      if (sensor.normalizedKind == SensorKindData.ambient) sensor,
   ];
 }
 
-List<SensorReading> diskSensors(List<SensorReading> sensors) {
+List<SensorReadingData> diskSensors(List<SensorReadingData> sensors) {
   return [
     for (final sensor in sensors)
       if (_matchesCategory(sensor, const ['ssd', 'nand', 'disk'])) sensor,
   ];
 }
 
-List<SensorReading> powerSensors(List<SensorReading> sensors) {
+List<SensorReadingData> powerSensors(List<SensorReadingData> sensors) {
   return [
     for (final sensor in sensors)
-      if (sensor.kind == SensorKind.other &&
+      if (sensor.normalizedKind == SensorKindData.other &&
           _matchesCategory(sensor, const [
             'power',
             'supply',
@@ -149,13 +152,15 @@ List<SensorReading> powerSensors(List<SensorReading> sensors) {
   ];
 }
 
-List<SensorReading> supportingSensors(List<SensorReading> sensors) {
-  final cpuIds = cpuSensors(sensors).map((sensor) => sensor.id).toSet();
-  final gpuIds = gpuSensors(sensors).map((sensor) => sensor.id).toSet();
+List<SensorReadingData> supportingSensors(List<SensorReadingData> sensors) {
+  final cpuIds = cpuSensors(sensors).map((sensor) => sensor.stableId).toSet();
+  final gpuIds = gpuSensors(sensors).map((sensor) => sensor.stableId).toSet();
 
   return [
     for (final sensor in sensors)
-      if (!cpuIds.contains(sensor.id) && !gpuIds.contains(sensor.id)) sensor,
+      if (!cpuIds.contains(sensor.stableId) &&
+          !gpuIds.contains(sensor.stableId))
+        sensor,
   ];
 }
 
@@ -167,8 +172,8 @@ double? mean(Iterable<double> values) {
   return list.reduce((a, b) => a + b) / list.length;
 }
 
-bool _matchesCategory(SensorReading sensor, List<String> keywords) {
-  final text = '${sensor.name} ${sensor.id}'.toLowerCase();
+bool _matchesCategory(SensorReadingData sensor, List<String> keywords) {
+  final text = '${sensor.displayName} ${sensor.stableId}'.toLowerCase();
   for (final keyword in keywords) {
     if (text.contains(keyword)) {
       return true;

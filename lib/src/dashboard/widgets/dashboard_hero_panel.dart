@@ -82,13 +82,13 @@ class DashboardHeroPanel extends StatelessWidget {
                           foreground: foreground,
                         ),
                         PillChip(
-                          label: state.capabilities.backend,
+                          label: state.capabilities.backendLabel,
                           color: const Color(0xFF1D5C66),
                           foreground: foreground,
                         ),
                         PillChip(
-                          label: thermalLabel(state.snapshot.thermalState),
-                          color: thermalChipColor(state.snapshot.thermalState),
+                          label: thermalLabel(state.snapshot.thermalLevel),
+                          color: thermalChipColor(state.snapshot.thermalLevel),
                           foreground: foreground,
                         ),
                         PillChip(

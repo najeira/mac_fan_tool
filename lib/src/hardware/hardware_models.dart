@@ -1,8 +1,14 @@
-enum SensorKind { cpu, gpu, memory, ambient, other }
+import 'package:mac_fan_tool/src/pigeon/hardware_api.g.dart';
 
-enum FanControlMode { automatic, manual }
-
-enum ThermalStateLevel { nominal, fair, serious, critical, unknown }
+export 'package:mac_fan_tool/src/pigeon/hardware_api.g.dart'
+    show
+        FanModeData,
+        FanReadingData,
+        HardwareCapabilitiesData,
+        HardwareSnapshotData,
+        SensorKindData,
+        SensorReadingData,
+        ThermalStateData;
 
 class DeviceMetadata {
   const DeviceMetadata({
@@ -26,89 +32,84 @@ class DeviceMetadata {
   final String? note;
 }
 
-class HardwareCapabilities {
-  const HardwareCapabilities({
-    required this.supportsRawSensors,
-    required this.supportsFanControl,
-    required this.hasFans,
-    required this.backend,
-    this.note,
-  });
-
-  const HardwareCapabilities.unavailable({
-    this.backend = 'unavailable',
-    this.note,
-  }) : supportsRawSensors = false,
-       supportsFanControl = false,
-       hasFans = false;
-
-  final bool supportsRawSensors;
-  final bool supportsFanControl;
-  final bool hasFans;
-  final String backend;
-  final String? note;
+HardwareCapabilitiesData unavailableHardwareCapabilities({
+  String backend = 'unavailable',
+  String? note,
+}) {
+  return HardwareCapabilitiesData(
+    supportsRawSensors: false,
+    supportsFanControl: false,
+    hasFans: false,
+    backend: backend,
+    note: note,
+  );
 }
 
-class SensorReading {
-  const SensorReading({
-    required this.id,
-    required this.name,
-    required this.unit,
-    required this.value,
-    required this.kind,
-  });
-
-  final String id;
-  final String name;
-  final String unit;
-  final double value;
-  final SensorKind kind;
+HardwareSnapshotData emptyHardwareSnapshot({String? note}) {
+  return HardwareSnapshotData(
+    capturedAtEpochMs: 0,
+    thermalState: ThermalStateData.unknown,
+    sensors: const <SensorReadingData>[],
+    fans: const <FanReadingData>[],
+    note: note,
+  );
 }
 
-class FanReading {
-  const FanReading({
-    required this.id,
-    required this.name,
-    required this.currentRpm,
-    required this.minimumRpm,
-    required this.maximumRpm,
-    required this.mode,
-    this.targetRpm,
-  });
+extension HardwareCapabilitiesDataX on HardwareCapabilitiesData {
+  bool get rawSensorsEnabled => supportsRawSensors ?? false;
 
-  final String id;
-  final String name;
-  final int currentRpm;
-  final int minimumRpm;
-  final int maximumRpm;
-  final int? targetRpm;
-  final FanControlMode mode;
+  bool get fanControlEnabled => supportsFanControl ?? false;
+
+  bool get fanTelemetryAvailable => hasFans ?? false;
+
+  String get backendLabel => backend ?? 'unavailable';
 }
 
-class HardwareSnapshot {
-  const HardwareSnapshot({
-    required this.capturedAt,
-    required this.thermalState,
-    required this.sensors,
-    required this.fans,
-    this.note,
-  });
+extension HardwareSnapshotDataX on HardwareSnapshotData {
+  DateTime get capturedAt =>
+      DateTime.fromMillisecondsSinceEpoch(capturedAtEpochMs ?? 0);
 
-  HardwareSnapshot.empty({this.note})
-    : capturedAt = DateTime.fromMillisecondsSinceEpoch(0),
-      thermalState = ThermalStateLevel.unknown,
-      sensors = const <SensorReading>[],
-      fans = const <FanReading>[];
+  ThermalStateData get thermalLevel => thermalState ?? ThermalStateData.unknown;
 
-  final DateTime capturedAt;
-  final ThermalStateLevel thermalState;
-  final List<SensorReading> sensors;
-  final List<FanReading> fans;
-  final String? note;
+  List<SensorReadingData> get sensorReadings {
+    return [...?sensors?.whereType<SensorReadingData>()];
+  }
+
+  List<FanReadingData> get fanReadings {
+    return [...?fans?.whereType<FanReadingData>()];
+  }
+}
+
+extension SensorReadingDataX on SensorReadingData {
+  String get stableId => id ?? 'sensor-${name ?? 'unknown'}';
+
+  String get displayName => name ?? 'Unnamed sensor';
+
+  String get displayUnit => unit ?? '';
+
+  double get numericValue => value ?? 0;
+
+  SensorKindData get normalizedKind => kind ?? SensorKindData.other;
+}
+
+extension FanReadingDataX on FanReadingData {
+  String get stableId => id ?? 'fan-${name ?? 'unknown'}';
+
+  String get displayName => name ?? 'Unnamed fan';
+
+  int get safeCurrentRpm => currentRpm ?? 0;
+
+  int get safeMinimumRpm => minimumRpm ?? 0;
+
+  int get safeMaximumRpm => maximumRpm ?? 0;
+
+  int? get safeTargetRpm => targetRpm;
+
+  FanModeData get normalizedMode => mode ?? FanModeData.automatic;
 }
 
 class MonitorState {
-  const MonitorState({
+  MonitorState({
     required this.device,
     required this.capabilities,
     required this.snapshot,
@@ -123,11 +124,11 @@ class MonitorState {
   factory MonitorState.initial() {
     return MonitorState(
       device: const DeviceMetadata.unknown(),
-      capabilities: const HardwareCapabilities.unavailable(),
-      snapshot: HardwareSnapshot.empty(
+      capabilities: unavailableHardwareCapabilities(),
+      snapshot: emptyHardwareSnapshot(
         note: 'Waiting for the native hardware bridge to initialize.',
       ),
-      history: <HardwareSnapshot>[],
+      history: <HardwareSnapshotData>[],
       isBootstrapping: true,
       isRefreshing: false,
     );
@@ -136,9 +137,9 @@ class MonitorState {
   static const Object _sentinel = Object();
 
   final DeviceMetadata device;
-  final HardwareCapabilities capabilities;
-  final HardwareSnapshot snapshot;
-  final List<HardwareSnapshot> history;
+  final HardwareCapabilitiesData capabilities;
+  final HardwareSnapshotData snapshot;
+  final List<HardwareSnapshotData> history;
   final bool isBootstrapping;
   final bool isRefreshing;
   final String? activeFanCommandId;
@@ -147,9 +148,9 @@ class MonitorState {
 
   MonitorState copyWith({
     DeviceMetadata? device,
-    HardwareCapabilities? capabilities,
-    HardwareSnapshot? snapshot,
-    List<HardwareSnapshot>? history,
+    HardwareCapabilitiesData? capabilities,
+    HardwareSnapshotData? snapshot,
+    List<HardwareSnapshotData>? history,
     bool? isBootstrapping,
     bool? isRefreshing,
     Object? activeFanCommandId = _sentinel,

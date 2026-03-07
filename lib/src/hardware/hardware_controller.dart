@@ -36,7 +36,7 @@ class MonitorController extends Notifier<MonitorState> {
 
       state = state.copyWith(
         device: results[0] as DeviceMetadata,
-        capabilities: results[1] as HardwareCapabilities,
+        capabilities: results[1] as HardwareCapabilitiesData,
         isBootstrapping: false,
       );
 
@@ -78,23 +78,43 @@ class MonitorController extends Notifier<MonitorState> {
     }
   }
 
-  Future<void> setFanAutomatic(FanReading fan) async {
+  Future<void> setFanAutomatic(FanReadingData fan) async {
+    final fanId = fan.id;
+    if (fanId == null || fanId.isEmpty) {
+      state = state.copyWith(
+        errorMessage: 'Fan command failed: missing fan id.',
+      );
+      return;
+    }
+
     await _runFanCommand(
-      fan.id,
-      () => _repository.setFanMode(fan.id, FanControlMode.automatic),
-      successMessage: '${fan.name} is back in automatic mode.',
+      fanId,
+      () => _repository.setFanMode(fanId, FanModeData.automatic),
+      successMessage: '${fan.displayName} is back in automatic mode.',
     );
   }
 
-  Future<void> setFanTargetRpm(FanReading fan, int targetRpm) async {
+  Future<void> setFanTargetRpm(FanReadingData fan, int targetRpm) async {
+    final fanId = fan.id;
+    if (fanId == null || fanId.isEmpty) {
+      state = state.copyWith(
+        errorMessage: 'Fan command failed: missing fan id.',
+      );
+      return;
+    }
+
     final clampedTarget = targetRpm
-        .clamp(fan.minimumRpm, fan.maximumRpm)
+        .clamp(fan.safeMinimumRpm, fan.safeMaximumRpm)
         .toInt();
 
-    await _runFanCommand(fan.id, () async {
-      await _repository.setFanMode(fan.id, FanControlMode.manual);
-      await _repository.setFanTargetRpm(fan.id, clampedTarget);
-    }, successMessage: '${fan.name} target set to $clampedTarget RPM.');
+    await _runFanCommand(
+      fanId,
+      () async {
+        await _repository.setFanMode(fanId, FanModeData.manual);
+        await _repository.setFanTargetRpm(fanId, clampedTarget);
+      },
+      successMessage: '${fan.displayName} target set to $clampedTarget RPM.',
+    );
   }
 
   Future<void> _runFanCommand(
@@ -123,8 +143,8 @@ class MonitorController extends Notifier<MonitorState> {
     }
   }
 
-  List<HardwareSnapshot> _appendHistory(HardwareSnapshot snapshot) {
-    final nextHistory = <HardwareSnapshot>[...state.history, snapshot];
+  List<HardwareSnapshotData> _appendHistory(HardwareSnapshotData snapshot) {
+    final nextHistory = <HardwareSnapshotData>[...state.history, snapshot];
 
     if (nextHistory.length <= 90) {
       return nextHistory;

@@ -66,25 +66,25 @@ class _SystemInfoPanel extends StatelessWidget {
           const Divider(height: 24),
           KeyValueRow(label: 'macOS Release', value: state.device.osVersion),
           const Divider(height: 24),
-          KeyValueRow(label: 'Backend', value: state.capabilities.backend),
+          KeyValueRow(label: 'Backend', value: state.capabilities.backendLabel),
           const Divider(height: 24),
           KeyValueRow(
             label: 'Raw Sensors',
-            value: state.capabilities.supportsRawSensors
+            value: state.capabilities.rawSensorsEnabled
                 ? '${summary.sensorCount} channels'
                 : 'Not available yet',
           ),
           const Divider(height: 24),
           KeyValueRow(
             label: 'Fans',
-            value: state.capabilities.hasFans
-                ? '${state.snapshot.fans.length} reported'
+            value: state.capabilities.fanTelemetryAvailable
+                ? '${state.snapshot.fanReadings.length} reported'
                 : 'Unavailable',
           ),
           const Divider(height: 24),
           KeyValueRow(
             label: 'Fan Control',
-            value: state.capabilities.supportsFanControl
+            value: state.capabilities.fanControlEnabled
                 ? 'Writable'
                 : 'Read only',
           ),
@@ -110,7 +110,7 @@ class _FansPanel extends StatelessWidget {
     return SectionPanel(
       title: 'Fans',
       subtitle: 'Current fan telemetry and manual RPM controls.',
-      child: state.snapshot.fans.isEmpty
+      child: state.snapshot.fanReadings.isEmpty
           ? const EmptyPanel(
               icon: Icons.wind_power,
               message:
@@ -118,16 +118,16 @@ class _FansPanel extends StatelessWidget {
             )
           : Column(
               children: [
-                for (final fan in state.snapshot.fans) ...[
+                for (final fan in state.snapshot.fanReadings) ...[
                   FanControlCard(
                     fan: fan,
-                    canControl: state.capabilities.supportsFanControl,
-                    isBusy: state.activeFanCommandId == fan.id,
+                    canControl: state.capabilities.fanControlEnabled,
+                    isBusy: state.activeFanCommandId == fan.stableId,
                     onAutomatic: () => controller.setFanAutomatic(fan),
                     onManualTargetSelected: (targetRpm) =>
                         controller.setFanTargetRpm(fan, targetRpm),
                   ),
-                  if (fan != state.snapshot.fans.last)
+                  if (fan != state.snapshot.fanReadings.last)
                     const SizedBox(height: 16),
                 ],
               ],

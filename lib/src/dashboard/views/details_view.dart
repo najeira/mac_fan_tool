@@ -23,7 +23,7 @@ class DetailsView extends StatelessWidget {
       title: 'CPU Channels',
       subtitle:
           'Individual CPU-related temperature channels. Average ${formatTemperature(summary.cpuAverage)}.',
-      sensors: cpuSensors(state.snapshot.sensors),
+      sensors: cpuSensors(state.snapshot.sensorReadings),
       emptyMessage:
           'No CPU temperature channels are available from the bridge.',
       emptyIcon: Icons.memory_outlined,
@@ -33,7 +33,7 @@ class DetailsView extends StatelessWidget {
       title: 'GPU Channels',
       subtitle:
           'Individual GPU-related temperature channels. Average ${formatTemperature(summary.gpuAverage)}.',
-      sensors: gpuSensors(state.snapshot.sensors),
+      sensors: gpuSensors(state.snapshot.sensorReadings),
       emptyMessage:
           'No GPU temperature channels are available from the bridge.',
       emptyIcon: Icons.graphic_eq_outlined,
@@ -43,7 +43,7 @@ class DetailsView extends StatelessWidget {
       title: 'Supporting Thermals',
       subtitle:
           'Memory, storage, power, ambient, and other supporting temperature channels.',
-      sensors: supportingSensors(state.snapshot.sensors),
+      sensors: supportingSensors(state.snapshot.sensorReadings),
       emptyMessage:
           'No supporting thermal channels are available from the bridge.',
       emptyIcon: Icons.developer_board_outlined,
@@ -84,7 +84,7 @@ class _SensorGroupPanel extends StatelessWidget {
 
   final String title;
   final String subtitle;
-  final List<SensorReading> sensors;
+  final List<SensorReadingData> sensors;
   final String emptyMessage;
   final IconData emptyIcon;
 

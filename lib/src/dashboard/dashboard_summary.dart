@@ -20,8 +20,8 @@ class DashboardSummary {
     required this.overallCaption,
   });
 
-  factory DashboardSummary.fromSnapshot(HardwareSnapshot snapshot) {
-    final sensors = snapshot.sensors;
+  factory DashboardSummary.fromSnapshot(HardwareSnapshotData snapshot) {
+    final sensors = snapshot.sensorReadings;
     final cpu = cpuSensors(sensors);
     final gpu = gpuSensors(sensors);
     final power = powerSensors(sensors);
@@ -29,12 +29,12 @@ class DashboardSummary {
     final memory = memorySensors(sensors);
     final ambient = ambientSensors(sensors);
 
-    final cpuAverage = mean(cpu.map((sensor) => sensor.value));
-    final gpuAverage = mean(gpu.map((sensor) => sensor.value));
-    final powerAverage = mean(power.map((sensor) => sensor.value));
-    final diskAverage = mean(disk.map((sensor) => sensor.value));
-    final memoryAverage = mean(memory.map((sensor) => sensor.value));
-    final ambientAverage = mean(ambient.map((sensor) => sensor.value));
+    final cpuAverage = mean(cpu.map((sensor) => sensor.numericValue));
+    final gpuAverage = mean(gpu.map((sensor) => sensor.numericValue));
+    final powerAverage = mean(power.map((sensor) => sensor.numericValue));
+    final diskAverage = mean(disk.map((sensor) => sensor.numericValue));
+    final memoryAverage = mean(memory.map((sensor) => sensor.numericValue));
+    final ambientAverage = mean(ambient.map((sensor) => sensor.numericValue));
 
     final categoryAverages = [
       cpuAverage,
@@ -47,7 +47,8 @@ class DashboardSummary {
 
     final overallTemperature = mean(categoryAverages);
     final fallbackOverall =
-        overallTemperature ?? mean(sensors.map((sensor) => sensor.value));
+        overallTemperature ??
+        mean(sensors.map((sensor) => sensor.numericValue));
 
     return DashboardSummary(
       overallTemperature: fallbackOverall,

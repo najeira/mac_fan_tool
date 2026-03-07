@@ -251,7 +251,7 @@ class EmptyPanel extends StatelessWidget {
 class SensorRow extends StatelessWidget {
   const SensorRow({super.key, required this.sensor});
 
-  final SensorReading sensor;
+  final SensorReadingData sensor;
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +261,7 @@ class SensorRow extends StatelessWidget {
           width: 14,
           height: 14,
           decoration: BoxDecoration(
-            color: sensorColor(sensor.kind),
+            color: sensorColor(sensor.normalizedKind),
             borderRadius: BorderRadius.circular(4),
           ),
         ),
@@ -271,14 +271,14 @@ class SensorRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                sensor.name,
+                sensor.displayName,
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
               Text(
-                sensor.id,
+                sensor.stableId,
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: const Color(0xFF647880)),
@@ -287,7 +287,7 @@ class SensorRow extends StatelessWidget {
           ),
         ),
         Text(
-          '${sensor.value.toStringAsFixed(1)} ${sensor.unit}',
+          '${sensor.numericValue.toStringAsFixed(1)} ${sensor.displayUnit}',
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
