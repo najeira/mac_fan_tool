@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
@@ -118,7 +119,7 @@ class _ThermalTrendPanel extends StatelessWidget {
                         drawVerticalLine: false,
                         horizontalInterval: _trendInterval(series),
                         getDrawingHorizontalLine: (_) => const FlLine(
-                          color: Color(0x22354B55),
+                          color: DashboardColors.chartGrid,
                           strokeWidth: 1,
                         ),
                       ),
@@ -142,7 +143,9 @@ class _ThermalTrendPanel extends StatelessWidget {
                               return Text(
                                 '${value.toStringAsFixed(0)}°',
                                 style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(color: const Color(0xFF50636A)),
+                                    ?.copyWith(
+                                      color: DashboardColors.textChart,
+                                    ),
                               );
                             },
                           ),
@@ -208,13 +211,13 @@ class _CategoryBreakdownPanel extends StatelessWidget {
         label: 'Power',
         value: summary.powerAverage,
         count: summary.powerSensorCount,
-        color: const Color(0xFF7A5B34),
+        color: DashboardColors.power,
       ),
       _SummaryCategory(
         label: 'Disk',
         value: summary.diskAverage,
         count: summary.diskSensorCount,
-        color: const Color(0xFF546A36),
+        color: DashboardColors.disk,
       ),
       _SummaryCategory(
         label: 'Memory',
@@ -284,7 +287,9 @@ class _CategoryBarRow extends StatelessWidget {
                     : '${category.count} sensors',
                 style: Theme.of(
                   context,
-                ).textTheme.bodySmall?.copyWith(color: const Color(0xFF61757D)),
+                ).textTheme.bodySmall?.copyWith(
+                  color: DashboardColors.textSensorCount,
+                ),
               ),
             ],
           ),
@@ -296,7 +301,7 @@ class _CategoryBarRow extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio.clamp(0, 1),
               minHeight: 12,
-              backgroundColor: const Color(0xFFE7ECEE),
+              backgroundColor: DashboardColors.progressTrack,
               color: category.color,
             ),
           ),
@@ -360,18 +365,18 @@ List<_TrendSeries> _buildTrendSeries(List<DashboardSummary> summaries) {
   return [
     _TrendSeries(
       label: 'Composite',
-      color: const Color(0xFF2C8C7A),
-      fillColor: const Color(0x222C8C7A),
+      color: DashboardColors.cpu,
+      fillColor: DashboardColors.cpuFill,
       spots: buildSpots((summary) => summary.overallTemperature),
     ),
     _TrendSeries(
       label: 'CPU Avg',
-      color: const Color(0xFF265C6A),
+      color: DashboardColors.info,
       spots: buildSpots((summary) => summary.cpuAverage),
     ),
     _TrendSeries(
       label: 'GPU Avg',
-      color: const Color(0xFF9B5B26),
+      color: DashboardColors.gpu,
       spots: buildSpots((summary) => summary.gpuAverage),
     ),
   ];

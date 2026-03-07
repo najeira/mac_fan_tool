@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
@@ -25,10 +26,10 @@ class SectionPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.76),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE2E8EA)),
+        border: Border.all(color: DashboardColors.panelBorder),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x120C141A),
+            color: DashboardColors.panelShadow,
             blurRadius: 18,
             offset: Offset(0, 10),
           ),
@@ -48,7 +49,9 @@ class SectionPanel extends StatelessWidget {
             subtitle,
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5A6E75)),
+            ).textTheme.bodyMedium?.copyWith(
+              color: DashboardColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 22),
           child,
@@ -76,9 +79,9 @@ class MetricCard extends StatelessWidget {
       width: 220,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFFDFBF8),
+        color: DashboardColors.metricSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE1E7E9)),
+        border: Border.all(color: DashboardColors.metricBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +90,7 @@ class MetricCard extends StatelessWidget {
             label,
             style: Theme.of(
               context,
-            ).textTheme.labelLarge?.copyWith(color: const Color(0xFF566A72)),
+            ).textTheme.labelLarge?.copyWith(color: DashboardColors.textMuted),
           ),
           const SizedBox(height: 10),
           Text(
@@ -100,7 +103,7 @@ class MetricCard extends StatelessWidget {
           Text(
             caption,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF677B82),
+              color: DashboardColors.textCaption,
               height: 1.35,
             ),
           ),
@@ -139,7 +142,7 @@ class LegendChip extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: const Color(0xFF314951),
+              color: DashboardColors.textStrong,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -198,9 +201,9 @@ class NoticeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (tone) {
-      NoticeTone.info => const Color(0xFF265C6A),
-      NoticeTone.success => const Color(0xFF1E7C63),
-      NoticeTone.error => const Color(0xFF9A443D),
+      NoticeTone.info => DashboardColors.info,
+      NoticeTone.success => DashboardColors.success,
+      NoticeTone.error => DashboardColors.error,
     };
 
     return Container(
@@ -234,19 +237,19 @@ class EmptyPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F4ED),
+        color: DashboardColors.softSurface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7DDD1)),
+        border: Border.all(color: DashboardColors.softBorder),
       ),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF7C6850)),
+          Icon(icon, color: DashboardColors.textEmptyIcon),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF6E5A45),
+                color: DashboardColors.textEmptyMessage,
                 height: 1.35,
               ),
             ),
@@ -290,7 +293,9 @@ class SensorRow extends StatelessWidget {
                 sensor.stableId,
                 style: Theme.of(
                   context,
-                ).textTheme.bodySmall?.copyWith(color: const Color(0xFF647880)),
+                ).textTheme.bodySmall?.copyWith(
+                  color: DashboardColors.textSubtle,
+                ),
               ),
             ],
           ),
@@ -321,7 +326,7 @@ class KeyValueRow extends StatelessWidget {
             label,
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5D7078)),
+            ).textTheme.bodyMedium?.copyWith(color: DashboardColors.textKey),
           ),
         ),
         const SizedBox(width: 18),

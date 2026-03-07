@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
@@ -23,11 +24,11 @@ class HeroPanel extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: const Color(0xFF15242E),
+        color: DashboardColors.heroSurface,
         borderRadius: BorderRadius.circular(28),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x220C141A),
+            color: DashboardColors.heroShadow,
             blurRadius: 28,
             offset: Offset(0, 16),
           ),
@@ -115,18 +116,18 @@ class _ViewSwitcher extends ConsumerWidget {
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const Color(0xFFDBE9EB);
+            return DashboardColors.heroControlSelected;
           }
-          return const Color(0xFF24414E);
+          return DashboardColors.heroControlIdle;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const Color(0xFF0F1D24);
+            return DashboardColors.heroControlForeground;
           }
           return Colors.white;
         }),
         side: const WidgetStatePropertyAll(
-          BorderSide(color: Color(0xFF3A5361)),
+          BorderSide(color: DashboardColors.heroControlBorder),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 16, vertical: 12),

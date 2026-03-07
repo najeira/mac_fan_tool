@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class FanControlCard extends StatefulWidget {
@@ -58,7 +59,7 @@ class _FanControlCardState extends State<FanControlCard> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.82),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE0E6E8)),
+        border: Border.all(color: DashboardColors.controlBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,7 +80,7 @@ class _FanControlCardState extends State<FanControlCard> {
                     Text(
                       '${widget.fan.safeCurrentRpm} RPM now • ${widget.fan.safeMinimumRpm}-${widget.fan.safeMaximumRpm} RPM range',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF566A72),
+                        color: DashboardColors.textMuted,
                       ),
                     ),
                   ],
@@ -112,7 +113,9 @@ class _FanControlCardState extends State<FanControlCard> {
                 'Target ${_targetRpm.round()} RPM',
                 style: Theme.of(
                   context,
-                ).textTheme.bodySmall?.copyWith(color: const Color(0xFF44575F)),
+                ).textTheme.bodySmall?.copyWith(
+                  color: DashboardColors.textTarget,
+                ),
               ),
               const Spacer(),
               OutlinedButton(
@@ -146,7 +149,9 @@ class _ModeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isManual = mode == FanModeData.manual;
-    final color = isManual ? const Color(0xFF7A5134) : const Color(0xFF2E6B5F);
+    final color = isManual
+        ? DashboardColors.fanManual
+        : DashboardColors.fanAutomatic;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 
@@ -26,9 +27,9 @@ class LoadingPanel extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFFF7FAFB),
+              color: DashboardColors.loadingSurface,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE0E8EB)),
+              border: Border.all(color: DashboardColors.loadingBorder),
             ),
             child: Row(
               children: [
@@ -44,7 +45,7 @@ class LoadingPanel extends ConsumerWidget {
                         ? 'Initializing device profile and capabilities.'
                         : 'Waiting for the first telemetry sample from the native bridge.',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFF28434B),
+                      color: DashboardColors.textLoading,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -92,8 +93,8 @@ class _LoadingStepRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = isComplete
-        ? const Color(0xFF1F7A62)
-        : const Color(0xFF8A6E46);
+        ? DashboardColors.successStrong
+        : DashboardColors.warningStrong;
 
     return Container(
       width: double.infinity,
@@ -114,7 +115,7 @@ class _LoadingStepRow extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: const Color(0xFF314951),
+                color: DashboardColors.textStrong,
                 fontWeight: FontWeight.w600,
               ),
             ),

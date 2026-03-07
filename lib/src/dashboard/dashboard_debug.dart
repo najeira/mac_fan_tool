@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
 
 class DebugFlags {
@@ -92,9 +93,9 @@ class DebugPanel extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F4ED),
+        color: DashboardColors.softSurface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7DDD1)),
+        border: Border.all(color: DashboardColors.softBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

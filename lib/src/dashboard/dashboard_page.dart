@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:macos_ui/macos_ui.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
@@ -21,7 +22,7 @@ class DashboardPage extends StatelessWidget {
       child: Theme(
         data: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF295A64),
+            seedColor: DashboardColors.seed,
             brightness: Brightness.light,
           ),
           useMaterial3: true,
@@ -31,7 +32,10 @@ class DashboardPage extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: <Color>[Color(0xFFF4F0E8), Color(0xFFE7EEF1)],
+                colors: <Color>[
+                  DashboardColors.backgroundStart,
+                  DashboardColors.backgroundEnd,
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

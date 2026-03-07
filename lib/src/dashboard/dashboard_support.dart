@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 import 'dashboard_summary.dart';
@@ -11,16 +12,16 @@ String? hardwareNote(MonitorState state) {
 Color thermalChipColor(ThermalStateData? level) {
   switch (level) {
     case ThermalStateData.nominal:
-      return const Color(0xFF1E6A5C);
+      return DashboardColors.thermalNominal;
     case ThermalStateData.fair:
-      return const Color(0xFF866225);
+      return DashboardColors.warning;
     case ThermalStateData.serious:
-      return const Color(0xFF9B5B26);
+      return DashboardColors.alert;
     case ThermalStateData.critical:
-      return const Color(0xFF8F3F3D);
+      return DashboardColors.danger;
     case ThermalStateData.unknown:
     case null:
-      return const Color(0xFF4B5D66);
+      return DashboardColors.neutralChip;
   }
 }
 
@@ -77,34 +78,34 @@ String formatFanSummary(FanSummary? summary) {
 Color fanSummaryChipColor(FanSummary? summary) {
   final normalizedSpeed = summary?.normalizedSpeed;
   if (normalizedSpeed == null) {
-    return const Color(0xFF4B5D66);
+    return DashboardColors.neutralChip;
   }
 
   if (normalizedSpeed < 0.35) {
-    return const Color(0xFF2E6B5F);
+    return DashboardColors.fanAutomatic;
   }
   if (normalizedSpeed < 0.65) {
-    return const Color(0xFF866225);
+    return DashboardColors.warning;
   }
   if (normalizedSpeed < 0.85) {
-    return const Color(0xFF9B5B26);
+    return DashboardColors.alert;
   }
-  return const Color(0xFF8F3F3D);
+  return DashboardColors.danger;
 }
 
 Color sensorColor(SensorKindData? kind) {
   switch (kind) {
     case SensorKindData.cpu:
-      return const Color(0xFF2C8C7A);
+      return DashboardColors.cpu;
     case SensorKindData.gpu:
-      return const Color(0xFF9B5B26);
+      return DashboardColors.gpu;
     case SensorKindData.memory:
-      return const Color(0xFF5D6AC3);
+      return DashboardColors.memory;
     case SensorKindData.ambient:
-      return const Color(0xFF6A6B3F);
+      return DashboardColors.ambient;
     case SensorKindData.other:
     case null:
-      return const Color(0xFF5D7078);
+      return DashboardColors.otherSensor;
   }
 }
 
