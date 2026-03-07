@@ -18,13 +18,17 @@ class FanControlCard extends ConsumerStatefulWidget {
 }
 
 class _FanControlCardState extends ConsumerState<FanControlCard> {
-  late double _targetRpm;
+  late double _committedTargetRpm;
+  late double _draftTargetRpm;
+  bool _hasPendingDraft = false;
 
   @override
   void initState() {
     super.initState();
     final fan = ref.read(fanReadingProvider(widget.fanId));
-    _targetRpm = fan == null ? 0 : _resolvedTarget(fan).toDouble();
+    final initialTarget = fan == null ? 0.0 : _resolvedTarget(fan).toDouble();
+    _committedTargetRpm = initialTarget;
+    _draftTargetRpm = initialTarget;
   }
 
   @override
@@ -32,7 +36,10 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.fanId != widget.fanId) {
       final fan = ref.read(fanReadingProvider(widget.fanId));
-      _targetRpm = fan == null ? 0 : _resolvedTarget(fan).toDouble();
+      final nextTarget = fan == null ? 0.0 : _resolvedTarget(fan).toDouble();
+      _committedTargetRpm = nextTarget;
+      _draftTargetRpm = nextTarget;
+      _hasPendingDraft = false;
     }
   }
 
@@ -57,12 +64,16 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
       }
 
       final nextTargetRpm = _resolvedTarget(next).toDouble();
-      if (_targetRpm == nextTargetRpm) {
+      if (_committedTargetRpm == nextTargetRpm) {
         return;
       }
 
       setState(() {
-        _targetRpm = nextTargetRpm;
+        _committedTargetRpm = nextTargetRpm;
+        if (!_hasPendingDraft || _draftTargetRpm == nextTargetRpm) {
+          _draftTargetRpm = nextTargetRpm;
+          _hasPendingDraft = false;
+        }
       });
     });
 
@@ -80,6 +91,12 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
     final disabled = !canControl || isBusy;
     final span = math.max(1, fan.safeMaximumRpm - fan.safeMinimumRpm);
     final divisions = math.max(1, span ~/ 100);
+    final sliderValue = _draftTargetRpm.clamp(
+      fan.safeMinimumRpm.toDouble(),
+      fan.safeMaximumRpm.toDouble(),
+    );
+    final committedValue = _committedTargetRpm.round();
+    final draftValue = _draftTargetRpm.round();
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -118,45 +135,55 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
           ),
           const SizedBox(height: 18),
           Slider(
-            value: _targetRpm.clamp(
-              fan.safeMinimumRpm.toDouble(),
-              fan.safeMaximumRpm.toDouble(),
-            ),
+            value: sliderValue,
             min: fan.safeMinimumRpm.toDouble(),
             max: fan.safeMaximumRpm.toDouble(),
             divisions: divisions,
-            label: '${_targetRpm.round()} RPM',
+            label: '$draftValue RPM',
             onChanged: disabled
                 ? null
                 : (value) {
                     setState(() {
-                      _targetRpm = value;
+                      _draftTargetRpm = value;
+                      _hasPendingDraft = value.round() != committedValue;
                     });
                   },
           ),
           Row(
             children: [
-              Text(
-                'Target ${_targetRpm.round()} RPM',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: DashboardColors.textTarget,
+              Expanded(
+                child: Text(
+                  _hasPendingDraft
+                      ? 'Current $committedValue RPM -> Pending $draftValue RPM'
+                      : 'Target $committedValue RPM',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _hasPendingDraft
+                        ? DashboardColors.fanManual
+                        : DashboardColors.textTarget,
+                    fontWeight: _hasPendingDraft ? FontWeight.w700 : null,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 10),
               OutlinedButton(
                 onPressed: disabled
                     ? null
-                    : () => ref.monitorActions.setFanAutomatic(fan),
+                    : () {
+                        setState(() {
+                          _draftTargetRpm = _committedTargetRpm;
+                          _hasPendingDraft = false;
+                        });
+                        ref.monitorActions.setFanAutomatic(fan);
+                      },
                 child: const Text('Automatic'),
               ),
               const SizedBox(width: 10),
               FilledButton(
                 onPressed: disabled
                     ? null
-                    : () => ref.monitorActions.setFanTargetRpm(
-                        fan,
-                        _targetRpm.round(),
-                      ),
+                    : () {
+                        ref.monitorActions.setFanTargetRpm(fan, draftValue);
+                      },
                 child: Text(isBusy ? 'Applying...' : 'Apply Manual RPM'),
               ),
             ],
