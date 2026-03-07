@@ -614,7 +614,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0AB1002C2DCE1001004A1120 /* FanControlHelper.xcconfig */;
 			buildSettings = {
-				DEVELOPMENT_TEAM = 6YPZ2F6T8G;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -623,7 +622,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0AB1002C2DCE1001004A1120 /* FanControlHelper.xcconfig */;
 			buildSettings = {
-				DEVELOPMENT_TEAM = 6YPZ2F6T8G;
 				ENABLE_HARDENED_RUNTIME = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
@@ -633,7 +631,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0AB1002C2DCE1001004A1120 /* FanControlHelper.xcconfig */;
 			buildSettings = {
-				DEVELOPMENT_TEAM = 6YPZ2F6T8G;
 				ENABLE_HARDENED_RUNTIME = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
@@ -742,7 +739,6 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 6YPZ2F6T8G;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -877,7 +873,6 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 6YPZ2F6T8G;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -899,7 +894,6 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 6YPZ2F6T8G;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
