@@ -7,14 +7,24 @@ NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensors(int32_t pag
     };
 
     IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
+    if (system == nil) {
+        return @{};
+    }
+
     IOHIDEventSystemClientSetMatching(system, (__bridge CFDictionaryRef)dictionary);
+    NSDictionary<NSString *, NSNumber *> *result = AppleSiliconTemperatureSensorsFromSystemClient(system, type);
+    CFRelease(system);
+    return result;
+}
+
+NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensorsFromSystemClient(IOHIDEventSystemClientRef system, int32_t type) {
+    if (system == nil) {
+        return @{};
+    }
 
     CFArrayRef services = IOHIDEventSystemClientCopyServices(system);
     if (services == nil) {
-        if (system != nil) {
-            CFRelease(system);
-        }
-        return nil;
+        return @{};
     }
 
     NSMutableDictionary<NSString *, NSMutableArray<NSNumber *> *> *samples = [NSMutableDictionary dictionary];
@@ -56,7 +66,5 @@ NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensors(int32_t pag
     }];
 
     CFRelease(services);
-    CFRelease(system);
-
     return result;
 }

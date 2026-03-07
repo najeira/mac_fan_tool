@@ -759,16 +759,15 @@ final class AppleSMCFanController {
     let modeValue: UInt32 = mode == .manual ? 1 : 0
     let maskBit = UInt32(1) << UInt32(index)
 
-    var didWrite = false
-    var lastError: AppleSMCFanControlError?
+    var results: [Result<Void, AppleSMCFanControlError>] = []
     let modeKey = "F\(index)Md"
 
     if smc.canWriteInteger(for: modeKey) {
       do {
         try smc.writeInteger(modeValue, for: modeKey)
-        didWrite = true
+        results.append(.success(()))
       } catch let error as AppleSMCFanControlError {
-        lastError = error
+        results.append(.failure(error))
       }
     }
 
@@ -778,17 +777,16 @@ final class AppleSMCFanController {
         try smc.updateInteger(for: forceKey) { currentValue in
           mode == .manual ? (currentValue | maskBit) : (currentValue & ~maskBit)
         }
-        didWrite = true
+        results.append(.success(()))
       } catch let error as AppleSMCFanControlError {
-        if lastError == nil {
-          lastError = error
-        }
+        results.append(.failure(error))
       }
     }
 
-    guard didWrite else {
-      throw lastError ?? AppleSMCFanControlError.modeControlUnavailable(index)
-    }
+    try FanControlWriteResultValidator.validate(
+      results,
+      unavailableError: AppleSMCFanControlError.modeControlUnavailable(index)
+    )
   }
 
   func setFanTargetRpm(index: Int, targetRpm: Int) throws {

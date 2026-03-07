@@ -38,6 +38,29 @@ struct FanControlHelperConfiguration {
   }
 }
 
+enum CodeSigningRequirementBuilder {
+  static func requirement(identifier: String, teamIdentifier: String) -> String {
+    "identifier \"\(identifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+  }
+}
+
+enum FanControlWriteResultValidator {
+  static func validate<E: Error>(
+    _ results: [Result<Void, E>],
+    unavailableError: @autoclosure () -> E
+  ) throws {
+    guard !results.isEmpty else {
+      throw unavailableError()
+    }
+
+    for result in results {
+      if case let .failure(error) = result {
+        throw error
+      }
+    }
+  }
+}
+
 @objc protocol FanControlXPCProtocol {
   func setFanMode(
     _ fanIndex: Int,

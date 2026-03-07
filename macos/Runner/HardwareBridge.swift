@@ -4,6 +4,18 @@ import Foundation
 import IOKit
 import IOKit.hidsystem
 
+enum HardwareSensorBridgeSupport {
+  static func temperatureValuesForSystemClient(
+    _ systemClient: IOHIDEventSystemClientRef?,
+    type: Int32 = kIOHIDEventTypeTemperature
+  ) -> [String: Double] {
+    let sensors =
+      AppleSiliconTemperatureSensorsFromSystemClient(systemClient, type) as? [String: NSNumber]
+      ?? [:]
+    return sensors.mapValues { $0.doubleValue }
+  }
+}
+
 private typealias FourCharCode = UInt32
 
 private enum SMCDataType: String {

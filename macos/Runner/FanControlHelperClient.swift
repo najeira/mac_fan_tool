@@ -5,7 +5,22 @@ import ServiceManagement
 final class FanControlHelperClient {
   static let shared = FanControlHelperClient()
 
-  private init() {}
+  typealias EnvironmentResolver = () throws -> ResolvedEnvironment
+  typealias ConnectionFactory = (ResolvedEnvironment) -> FanControlXPCConnection
+
+  private let commandTimeout: DispatchTimeInterval
+  private let environmentResolver: EnvironmentResolver?
+  private let connectionFactory: ConnectionFactory?
+
+  init(
+    commandTimeout: DispatchTimeInterval = .seconds(10),
+    environmentResolver: EnvironmentResolver? = nil,
+    connectionFactory: ConnectionFactory? = nil
+  ) {
+    self.commandTimeout = commandTimeout
+    self.environmentResolver = environmentResolver
+    self.connectionFactory = connectionFactory
+  }
 
   func canControlFans(isFanControlSupported: Bool) -> Bool {
     guard isFanControlSupported else {
@@ -53,7 +68,7 @@ final class FanControlHelperClient {
 
   func setFanMode(fanId: String, mode: FanModeData) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
-    let environment = try resolvedEnvironment()
+    let environment = try currentEnvironment()
     if #available(macOS 13.0, *) {
       try ensureServiceReady(environment: environment)
     }
@@ -66,7 +81,7 @@ final class FanControlHelperClient {
     let fanIndex = try resolvedFanIndex(from: fanId)
     let clampedTarget = max(0, min(Int(targetRpm), Int(Int32.max)))
 
-    let environment = try resolvedEnvironment()
+    let environment = try currentEnvironment()
     if #available(macOS 13.0, *) {
       try ensureServiceReady(environment: environment)
     }
@@ -77,7 +92,7 @@ final class FanControlHelperClient {
 
   private func helperAvailability() -> HelperAvailability {
     do {
-      let environment = try resolvedEnvironment()
+      let environment = try currentEnvironment()
       if #available(macOS 13.0, *) {
         return .available(environment, serviceStatus(from: environment.service.status))
       }
@@ -210,65 +225,70 @@ final class FanControlHelperClient {
     }
   }
 
-  private func performCommand(
+  func performCommand(
     environment: ResolvedEnvironment,
     _ work: (FanControlXPCProtocol, @escaping (String?) -> Void) -> Void
   ) throws {
-    let connection = NSXPCConnection(
-      machServiceName: environment.configuration.machServiceName,
-      options: .privileged
-    )
-    connection.remoteObjectInterface = NSXPCInterface(with: FanControlXPCProtocol.self)
-    if #available(macOS 13.0, *) {
-      connection.setCodeSigningRequirement(environment.helperRequirement)
-    }
-
-    let semaphore = DispatchSemaphore(value: 0)
-    let timeout = DispatchTime.now() + .seconds(10)
-    var helperErrorMessage: String?
-    var connectionError: Error?
+    let connection = makeConnection(for: environment)
+    let awaiter = XPCCommandAwaiter()
+    let timeout = DispatchTime.now() + commandTimeout
 
     connection.invalidationHandler = {
-      semaphore.signal()
+      awaiter.complete(
+        .failure(
+          .connectionFailed(
+            "The privileged helper connection was invalidated before replying."
+          )
+        )
+      )
     }
     connection.interruptionHandler = {
-      semaphore.signal()
+      awaiter.complete(
+        .failure(
+          .connectionFailed(
+            "The privileged helper connection was interrupted before replying."
+          )
+        )
+      )
     }
     connection.resume()
-
-    guard let remote = connection.synchronousRemoteObjectProxyWithErrorHandler({ error in
-      connectionError = error
-      semaphore.signal()
-    }) as? FanControlXPCProtocol else {
+    defer {
       connection.invalidate()
+    }
+
+    guard let remote = connection.remoteObjectProxy(errorHandler: { error in
+      awaiter.complete(.failure(.connectionFailed(error.localizedDescription)))
+    }) else {
       throw FanControlHelperClientError.connectionFailed(
         "The privileged helper interface could not be created."
       )
     }
 
     work(remote) { message in
-      helperErrorMessage = message
-      semaphore.signal()
+      if let message {
+        awaiter.complete(.failure(.commandFailed(message)))
+      } else {
+        awaiter.complete(.success(()))
+      }
     }
 
-    let waitResult = semaphore.wait(timeout: timeout)
-    connection.invalidate()
+    try awaiter.wait(timeout: timeout)
+  }
 
-    if waitResult == .timedOut {
-      throw FanControlHelperClientError.connectionFailed(
-        "Timed out while waiting for the privileged helper."
-      )
+  private func currentEnvironment() throws -> ResolvedEnvironment {
+    if let environmentResolver {
+      return try environmentResolver()
     }
 
-    if let connectionError {
-      throw FanControlHelperClientError.connectionFailed(
-        connectionError.localizedDescription
-      )
+    return try resolvedEnvironment()
+  }
+
+  private func makeConnection(for environment: ResolvedEnvironment) -> FanControlXPCConnection {
+    if let connectionFactory {
+      return connectionFactory(environment)
     }
 
-    if let helperErrorMessage {
-      throw FanControlHelperClientError.commandFailed(helperErrorMessage)
-    }
+    return FanControlNSXPCConnection(environment: environment)
   }
 
   private func resolvedFanIndex(from fanId: String) throws -> Int {
@@ -453,11 +473,14 @@ final class FanControlHelperClient {
   }
 
   private func codeSigningRequirement(identifier: String, teamIdentifier: String) -> String {
-    "identifier \"\(identifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+    CodeSigningRequirementBuilder.requirement(
+      identifier: identifier,
+      teamIdentifier: teamIdentifier
+    )
   }
 }
 
-enum FanControlHelperClientError: Error {
+enum FanControlHelperClientError: Error, Equatable {
   case unsupportedOS
   case invalidFanId(String)
   case configurationInvalid(String)
@@ -511,7 +534,7 @@ private enum HelperServiceStatus {
   case unknown
 }
 
-private struct ResolvedEnvironment {
+struct ResolvedEnvironment {
   let configuration: FanControlHelperConfiguration
   let helperRequirement: String
 
@@ -528,5 +551,97 @@ private struct CodeSignatureDetails {
   init(dictionary: NSDictionary) {
     identifier = dictionary[kSecCodeInfoIdentifier as String] as? String
     teamIdentifier = dictionary[kSecCodeInfoTeamIdentifier as String] as? String
+  }
+}
+
+protocol FanControlXPCConnection: AnyObject {
+  var invalidationHandler: (() -> Void)? { get set }
+  var interruptionHandler: (() -> Void)? { get set }
+
+  func resume()
+  func invalidate()
+  func remoteObjectProxy(errorHandler: @escaping (Error) -> Void) -> FanControlXPCProtocol?
+}
+
+private final class FanControlNSXPCConnection: FanControlXPCConnection {
+  private let connection: NSXPCConnection
+
+  init(environment: ResolvedEnvironment) {
+    connection = NSXPCConnection(
+      machServiceName: environment.configuration.machServiceName,
+      options: .privileged
+    )
+    connection.remoteObjectInterface = NSXPCInterface(with: FanControlXPCProtocol.self)
+    if #available(macOS 13.0, *) {
+      connection.setCodeSigningRequirement(environment.helperRequirement)
+    }
+  }
+
+  var invalidationHandler: (() -> Void)? {
+    get { connection.invalidationHandler }
+    set { connection.invalidationHandler = newValue }
+  }
+
+  var interruptionHandler: (() -> Void)? {
+    get { connection.interruptionHandler }
+    set { connection.interruptionHandler = newValue }
+  }
+
+  func resume() {
+    connection.resume()
+  }
+
+  func invalidate() {
+    connection.invalidate()
+  }
+
+  func remoteObjectProxy(errorHandler: @escaping (Error) -> Void) -> FanControlXPCProtocol? {
+    connection.remoteObjectProxyWithErrorHandler(errorHandler) as? FanControlXPCProtocol
+  }
+}
+
+private final class XPCCommandAwaiter {
+  private let lock = NSLock()
+  private let semaphore = DispatchSemaphore(value: 0)
+  private var result: Result<Void, FanControlHelperClientError>?
+
+  func complete(_ result: Result<Void, FanControlHelperClientError>) {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard self.result == nil else {
+      return
+    }
+
+    self.result = result
+    semaphore.signal()
+  }
+
+  func wait(timeout: DispatchTime) throws {
+    if semaphore.wait(timeout: timeout) == .timedOut {
+      throw FanControlHelperClientError.connectionFailed(
+        "Timed out while waiting for the privileged helper."
+      )
+    }
+
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard let result else {
+      throw FanControlHelperClientError.connectionFailed(
+        "The privileged helper finished without returning a result."
+      )
+    }
+
+    switch result {
+    case .success:
+      return
+    case let .failure(error):
+      throw error
+    }
   }
 }

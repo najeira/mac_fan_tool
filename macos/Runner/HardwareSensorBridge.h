@@ -22,3 +22,4 @@ CFTypeRef IOHIDServiceClientCopyProperty(IOHIDServiceClientRef service, CFString
 IOHIDFloat IOHIDEventGetFloatValue(IOHIDEventRef event, int32_t field);
 
 NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensors(int32_t page, int32_t usage, int32_t type);
+NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensorsFromSystemClient(IOHIDEventSystemClientRef client, int32_t type);
