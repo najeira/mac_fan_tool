@@ -39,6 +39,13 @@ String sensorCountCaption(int count, String category) {
   return '$count $category channel${count == 1 ? '' : 's'} aggregated';
 }
 
+String compactSensorCountLabel(int count) {
+  if (count <= 0) {
+    return '0 ch';
+  }
+  return '$count ch';
+}
+
 String sampleAge(DateTime capturedAt) {
   if (capturedAt.millisecondsSinceEpoch == 0) {
     return 'Pending';

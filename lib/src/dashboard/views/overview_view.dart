@@ -17,40 +17,39 @@ class OverviewView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isWide = ref.watch(isWideProvider);
-    final snapshot = ref.watch(monitorSnapshotProvider);
     final history = ref.watch(monitorHistoryProvider);
     final summary = ref.watch(summaryProvider);
 
     final cards = [
       MetricCard(
-        label: 'CPU Avg',
+        label: 'CPU',
         value: formatTemperature(summary.cpuAverage),
-        caption: sensorCountCaption(summary.cpuSensorCount, 'CPU'),
+        caption: compactSensorCountLabel(summary.cpuSensorCount),
+        accentColor: DashboardColors.cpu,
       ),
       MetricCard(
-        label: 'GPU Avg',
+        label: 'GPU',
         value: formatTemperature(summary.gpuAverage),
-        caption: sensorCountCaption(summary.gpuSensorCount, 'GPU'),
+        caption: compactSensorCountLabel(summary.gpuSensorCount),
+        accentColor: DashboardColors.gpu,
       ),
       MetricCard(
-        label: 'Power Avg',
+        label: 'Power',
         value: formatTemperature(summary.powerAverage),
-        caption: sensorCountCaption(summary.powerSensorCount, 'power'),
+        caption: compactSensorCountLabel(summary.powerSensorCount),
+        accentColor: DashboardColors.power,
       ),
       MetricCard(
-        label: 'Disk Avg',
+        label: 'Disk',
         value: formatTemperature(summary.diskAverage),
-        caption: sensorCountCaption(summary.diskSensorCount, 'disk'),
+        caption: compactSensorCountLabel(summary.diskSensorCount),
+        accentColor: DashboardColors.disk,
       ),
       MetricCard(
-        label: 'Memory Avg',
+        label: 'Memory',
         value: formatTemperature(summary.memoryAverage),
-        caption: sensorCountCaption(summary.memorySensorCount, 'memory'),
-      ),
-      MetricCard(
-        label: 'Last Sample',
-        value: sampleAge(snapshot.capturedAt),
-        caption: 'Updated ${formatSampleTime(snapshot.capturedAt)}',
+        caption: compactSensorCountLabel(summary.memorySensorCount),
+        accentColor: DashboardColors.memory,
       ),
     ];
 

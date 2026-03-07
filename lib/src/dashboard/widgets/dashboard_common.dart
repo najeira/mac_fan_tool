@@ -67,14 +67,17 @@ class MetricCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.caption,
+    required this.accentColor,
   });
 
   final String label;
   final String value;
   final String caption;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       width: 220,
       padding: const EdgeInsets.all(20),
@@ -86,11 +89,46 @@ class MetricCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: DashboardColors.textMuted),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: accentColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        label,
+                        style: textTheme.labelLarge?.copyWith(
+                          color: accentColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  caption,
+                  textAlign: TextAlign.end,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: DashboardColors.textCaption,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Text(
@@ -98,14 +136,6 @@ class MetricCard extends StatelessWidget {
             style: Theme.of(
               context,
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            caption,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: DashboardColors.textCaption,
-              height: 1.35,
-            ),
           ),
         ],
       ),
@@ -121,6 +151,7 @@ class LegendChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -141,7 +172,7 @@ class LegendChip extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            style: textTheme.labelLarge?.copyWith(
               color: DashboardColors.textStrong,
               fontWeight: FontWeight.w700,
             ),
@@ -168,6 +199,7 @@ class PillChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -181,7 +213,7 @@ class PillChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            style: textTheme.labelLarge?.copyWith(
               color: foreground,
               fontWeight: FontWeight.w600,
             ),
@@ -200,6 +232,8 @@ class NoticeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     final color = switch (tone) {
       NoticeTone.info => DashboardColors.info,
       NoticeTone.success => DashboardColors.success,
@@ -216,7 +250,7 @@ class NoticeBanner extends StatelessWidget {
       ),
       child: Text(
         message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        style: textTheme.bodyMedium?.copyWith(
           color: color,
           fontWeight: FontWeight.w600,
         ),
@@ -233,6 +267,7 @@ class EmptyPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -248,7 +283,7 @@ class EmptyPanel extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              style: textTheme.bodyMedium?.copyWith(
                 color: DashboardColors.textEmptyMessage,
                 height: 1.35,
               ),
