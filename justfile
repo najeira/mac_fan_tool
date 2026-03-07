@@ -2,9 +2,14 @@ set dotenv-load := true
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 app_name := "MacFanTool"
-app_file := "build/macos/Build/Products/Release/" + app_name + ".app"
-notary_zip_file := app_name + "-notary.zip"
-release_zip_file := app_name + ".zip"
+build_dir := "build/macos/Build/Products/Release"
+dist_dir := "build/dist"
+app_file := build_dir + "/" + app_name + ".app"
+notary_zip_file := dist_dir + "/" + app_name + "-notary.zip"
+release_zip_file := dist_dir + "/" + app_name + ".zip"
+dmg_stage_dir := dist_dir + "/" + app_name + "-dmg"
+temp_dmg_file := dist_dir + "/" + app_name + "-temp.dmg"
+release_dmg_file := dist_dir + "/" + app_name + ".dmg"
 frameworks_dir := app_file + "/Contents/Frameworks"
 helper_file := app_file + "/Contents/Library/LaunchServices/FanControlHelper"
 launch_daemon_plist := app_file + "/Contents/Library/LaunchDaemons/FanControlHelper.plist"
@@ -47,6 +52,7 @@ show-signing-targets:
   printf 'Installed app: %s\n' "{{installed_app_file}}"
   printf 'Notary ZIP: %s\n' "{{notary_zip_file}}"
   printf 'Release ZIP: %s\n' "{{release_zip_file}}"
+  printf 'Release DMG: %s\n' "{{release_dmg_file}}"
 
 sign-frameworks: build-release check-signing-env
   shopt -s nullglob; for item in "{{frameworks_dir}}"/*.framework "{{frameworks_dir}}"/*.dylib; do echo "Signing nested code: $item"; codesign --force --timestamp --sign "${APPLE_SIGN_NAME}" "$item"; done
@@ -63,6 +69,8 @@ sign-app: sign-frameworks sign-helper
 
 sign-release: sign-app
 
+prepare-release: sign-release verify-release
+
 verify-release:
   codesign --verify --deep --strict --verbose=4 {{app_file}}
   spctl --assess --verbose {{app_file}}
@@ -71,26 +79,73 @@ verify-release:
   codesign -d --entitlements - {{app_file}}
   codesign -d --entitlements - {{helper_file}}
 
-zip-notary: sign-release verify-release
-  rm -f "{{notary_zip_file}}"
-  ditto -c -k --sequesterRsrc --keepParent "{{app_file}}" "{{notary_zip_file}}"
+package-app-zip archive_path:
+  mkdir -p "{{dist_dir}}"
+  rm -f "{{archive_path}}"
+  ditto -c -k --sequesterRsrc --keepParent "{{app_file}}" "{{archive_path}}"
 
-notary-submit: zip-notary check-notary-env
-  xcrun notarytool submit "{{notary_zip_file}}" --apple-id "${APPLE_EMAIL_ADDRESS}" --team-id "${APPLE_TEAM_ID}" --password "${APP_SPECIFIC_PASSWORD}" --wait
+zip-notary: prepare-release
+  just package-app-zip "{{notary_zip_file}}"
+
+notary-submit-file artifact: check-notary-env
+  xcrun notarytool submit "{{artifact}}" --apple-id "${APPLE_EMAIL_ADDRESS}" --team-id "${APPLE_TEAM_ID}" --password "${APP_SPECIFIC_PASSWORD}" --wait
+
+notary-submit: zip-notary
+  just notary-submit-file "{{notary_zip_file}}"
 
 notary-log submission_id:
   xcrun notarytool log "{{submission_id}}" --apple-id "${APPLE_EMAIL_ADDRESS}" --team-id "${APPLE_TEAM_ID}" --password "${APP_SPECIFIC_PASSWORD}"
 
+staple-file artifact:
+  xcrun stapler staple "{{artifact}}"
+
+validate-stapled-file artifact:
+  xcrun stapler validate "{{artifact}}"
+
+sign-disk-image disk_image: check-signing-env
+  codesign --force --timestamp --sign "${APPLE_SIGN_NAME}" "{{disk_image}}"
+
+verify-disk-image disk_image:
+  codesign --verify --verbose=4 "{{disk_image}}"
+  spctl -a -t open --context context:primary-signature -v "{{disk_image}}"
+
 staple-release: notary-submit
-  xcrun stapler staple {{app_file}}
+  just staple-file "{{app_file}}"
 
 verify-stapled: staple-release
-  xcrun stapler validate {{app_file}}
+  just validate-stapled-file "{{app_file}}"
   spctl --assess --verbose {{app_file}}
 
 zip-release: verify-stapled
-  rm -f "{{release_zip_file}}"
-  ditto -c -k --sequesterRsrc --keepParent "{{app_file}}" "{{release_zip_file}}"
+  just package-app-zip "{{release_zip_file}}"
+
+dmg-stage: prepare-release
+  rm -rf "{{dmg_stage_dir}}"
+  mkdir -p "{{dmg_stage_dir}}"
+  ditto "{{app_file}}" "{{dmg_stage_dir}}/{{app_name}}.app"
+  ln -s /Applications "{{dmg_stage_dir}}/Applications"
+
+dmg-create: dmg-stage
+  mkdir -p "{{dist_dir}}"
+  rm -f "{{temp_dmg_file}}" "{{release_dmg_file}}"
+  hdiutil create -volname "{{app_name}}" -srcfolder "{{dmg_stage_dir}}" -fs HFS+ -format UDRW -ov "{{temp_dmg_file}}"
+  hdiutil convert "{{temp_dmg_file}}" -format UDZO -ov -o "{{dist_dir}}/{{app_name}}"
+
+dmg-sign: dmg-create
+  just sign-disk-image "{{release_dmg_file}}"
+
+dmg-verify: dmg-sign
+  just verify-disk-image "{{release_dmg_file}}"
+
+dmg-notary-submit: dmg-verify
+  just notary-submit-file "{{release_dmg_file}}"
+
+dmg-staple: dmg-notary-submit
+  just staple-file "{{release_dmg_file}}"
+
+dmg-verify-stapled: dmg-staple
+  just validate-stapled-file "{{release_dmg_file}}"
+  spctl -a -t open --context context:primary-signature -v "{{release_dmg_file}}"
 
 install-release:
   ditto "{{app_file}}" "{{installed_app_file}}"
@@ -100,4 +155,6 @@ verify-installed:
   codesign --verify --strict --verbose=4 "{{installed_helper_file}}"
   plutil -p "{{installed_app_file}}/Contents/Library/LaunchDaemons/FanControlHelper.plist"
 
-dist: zip-release
+dist-zip: zip-release
+dist: dist-zip
+dist-dmg: dmg-verify-stapled
