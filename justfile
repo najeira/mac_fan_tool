@@ -5,7 +5,7 @@ app_name := "MacFanTool"
 app_file := "build/macos/Build/Products/Release/" + app_name + ".app"
 zip_file := app_name + ".zip"
 frameworks_dir := app_file + "/Contents/Frameworks"
-helper_file := app_file + "/Contents/Library/HelperTools/FanControlHelper"
+helper_file := app_file + "/Contents/Library/LaunchServices/FanControlHelper"
 launch_daemon_plist := app_file + "/Contents/Library/LaunchDaemons/FanControlHelper.plist"
 
 default:

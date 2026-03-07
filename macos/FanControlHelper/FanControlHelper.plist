@@ -3,7 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>BundleProgram</key>
-	<string>Contents/Library/HelperTools/FanControlHelper</string>
+	<string>Contents/Library/LaunchServices/FanControlHelper</string>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>placeholder.bundle.id</string>
+	</array>
 	<key>Label</key>
 	<string>placeholder.fancontrol.helper</string>
 	<key>MachServices</key>
@@ -13,5 +17,7 @@
 	</dict>
 	<key>RunAtLoad</key>
 	<false/>
+	<key>UserName</key>
+	<string>root</string>
 </dict>
 </plist>

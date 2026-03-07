@@ -44,7 +44,7 @@ final class FanControlHelperClient {
       case .requiresApproval:
         return "Approve the privileged fan helper in System Settings > General > Login Items before applying manual RPM."
       case .notFound:
-        return "The bundled privileged fan helper is missing from this build."
+        return "macOS could not validate the bundled privileged fan helper in this build."
       case .unknown:
         return "The privileged fan helper reported an unknown registration state."
       }
@@ -323,9 +323,7 @@ final class FanControlHelperClient {
   }
 
   private func helperExecutableURL(for bundleURL: URL) -> URL {
-    bundleURL
-      .appendingPathComponent("Contents/Library/HelperTools", isDirectory: true)
-      .appendingPathComponent(FanControlHelperConfiguration.helperExecutableName)
+    bundleURL.appendingPathComponent(FanControlHelperConfiguration.helperRelativePath)
   }
 
   private func launchDaemonPlistURL(for bundleURL: URL) -> URL {
