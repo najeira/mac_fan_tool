@@ -40,16 +40,16 @@ Color thermalChipColor(ThermalStateData? level) {
 
 String compositeChipLabel(double? overallTemperature) {
   if (overallTemperature == null) {
-    return 'Composite pending';
+    return '...';
   }
-  return 'Composite ${overallTemperature.toStringAsFixed(1)} C';
+  return formatTemperature(overallTemperature);
 }
 
 String formatTemperature(double? value) {
   if (value == null) {
     return 'Unavailable';
   }
-  return '${value.toStringAsFixed(1)} C';
+  return '${value.toStringAsFixed(1)} °C';
 }
 
 String sensorCountCaption(int count, String category) {
