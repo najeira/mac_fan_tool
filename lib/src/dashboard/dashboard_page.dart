@@ -94,28 +94,33 @@ class _DashboardStatusBanners extends ConsumerWidget {
     final lastCommandMessage = ref.watch(monitorLastCommandMessageProvider);
     final hardwareNote = ref.watch(dashboardHardwareNoteProvider);
 
-    if (errorMessage == null &&
-        lastCommandMessage == null &&
-        hardwareNote == null) {
+    final children = [
+      if (errorMessage != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 18),
+          child: NoticeBanner(tone: NoticeTone.error, message: errorMessage),
+        ),
+      if (lastCommandMessage != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 18),
+          child: NoticeBanner(
+            tone: NoticeTone.success,
+            message: lastCommandMessage,
+          ),
+        ),
+      if (hardwareNote != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 18),
+          child: NoticeBanner(tone: NoticeTone.info, message: hardwareNote),
+        ),
+    ];
+    if (children.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (errorMessage != null) ...[
-          const SizedBox(height: 18),
-          NoticeBanner(tone: NoticeTone.error, message: errorMessage),
-        ],
-        if (lastCommandMessage != null) ...[
-          const SizedBox(height: 18),
-          NoticeBanner(tone: NoticeTone.success, message: lastCommandMessage),
-        ],
-        if (hardwareNote != null) ...[
-          const SizedBox(height: 18),
-          NoticeBanner(tone: NoticeTone.info, message: hardwareNote),
-        ],
-      ],
+      children: children,
     );
   }
 }

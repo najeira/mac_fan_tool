@@ -73,13 +73,14 @@ class DashboardHeroPanel extends ConsumerWidget {
               ),
             ],
           ),
-          if (isBootstrapping) ...[
-            const SizedBox(height: 22),
-            const LinearProgressIndicator(
-              minHeight: 5,
-              backgroundColor: Color(0x401A3038),
+          if (isBootstrapping)
+            Padding(
+              padding: const EdgeInsets.only(top: 22),
+              child: const LinearProgressIndicator(
+                minHeight: 5,
+                backgroundColor: Color(0x401A3038),
+              ),
             ),
-          ],
         ],
       ),
     );
