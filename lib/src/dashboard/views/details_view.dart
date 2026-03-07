@@ -3,37 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
+import 'package:mac_fan_tool/src/dashboard/widgets/adaptive_panel_layout.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class DetailsView extends ConsumerWidget {
+class DetailsView extends StatelessWidget {
   const DetailsView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isWide = ref.watch(isWideProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    return const AdaptivePanelLayout(
       children: [
-        if (isWide)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Expanded(child: _CpuSensorPanel()),
-              SizedBox(width: 20),
-              Expanded(child: _GpuSensorPanel()),
-              SizedBox(width: 20),
-              Expanded(child: _SupportingSensorPanel()),
-            ],
-          )
-        else ...const [
-          _CpuSensorPanel(),
-          SizedBox(height: 20),
-          _GpuSensorPanel(),
-          SizedBox(height: 20),
-          _SupportingSensorPanel(),
-        ],
+        _CpuSensorPanel(),
+        _GpuSensorPanel(),
+        _SupportingSensorPanel(),
       ],
     );
   }
@@ -136,12 +119,10 @@ class _SensorGroupPanel extends StatelessWidget {
       subtitle: subtitle,
       child: sensors.isEmpty
           ? EmptyPanel(icon: emptyIcon, message: emptyMessage)
-          : Column(
+          : SeparatedColumn(
+              separator: const Divider(height: 24),
               children: [
-                for (final sensor in sensors) ...[
-                  SensorRow(sensor: sensor),
-                  if (sensor != sensors.last) const Divider(height: 24),
-                ],
+                for (final sensor in sensors) SensorRow(sensor: sensor),
               ],
             ),
     );

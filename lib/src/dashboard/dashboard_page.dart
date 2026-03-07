@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
-import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/views/details_view.dart';
@@ -12,6 +11,7 @@ import 'package:mac_fan_tool/src/dashboard/views/system_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_hero_panel.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_loading_panel.dart';
+import 'package:mac_fan_tool/src/dashboard/widgets/responsive_dashboard_scope.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -55,28 +55,20 @@ class _DashboardLayout extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final showLoadingPanel = ref.watch(showLoadingPanelProvider);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 1180;
-        return ProviderScope(
-          overrides: [isWideProvider.overrideWithValue(isWide)],
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
-            children: [
-              // const DebugPanel(),
-              const _DashboardStatusBanners(),
-              const SizedBox(height: 26),
-              if (showLoadingPanel) ...const [
-                LoadingPanel(),
-              ] else ...const [
-                HeroPanel(),
-                SizedBox(height: 26),
-                _DashboardBody(),
-              ],
-            ],
-          ),
-        );
-      },
+    return ResponsiveDashboardScope(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
+        children: [
+          // const DebugPanel(),
+          const _DashboardStatusBanners(),
+          const SizedBox(height: 26),
+          if (showLoadingPanel) ...const [LoadingPanel()] else ...const [
+            HeroPanel(),
+            SizedBox(height: 26),
+            _DashboardBody(),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -110,30 +102,18 @@ class _DashboardStatusBanners extends ConsumerWidget {
 
     final children = [
       if (errorMessage != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 18),
-          child: NoticeBanner(tone: NoticeTone.error, message: errorMessage),
-        ),
+        NoticeBanner(tone: NoticeTone.error, message: errorMessage),
       if (lastCommandMessage != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 18),
-          child: NoticeBanner(
-            tone: NoticeTone.success,
-            message: lastCommandMessage,
-          ),
-        ),
+        NoticeBanner(tone: NoticeTone.success, message: lastCommandMessage),
       if (hardwareNote != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 18),
-          child: NoticeBanner(tone: NoticeTone.info, message: hardwareNote),
-        ),
+        NoticeBanner(tone: NoticeTone.info, message: hardwareNote),
     ];
     if (children.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return SeparatedColumn(
+      separator: const SizedBox(height: 18),
       children: children,
     );
   }

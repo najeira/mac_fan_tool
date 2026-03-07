@@ -79,6 +79,36 @@ class SectionPanel extends StatelessWidget {
   }
 }
 
+class SeparatedColumn extends StatelessWidget {
+  const SeparatedColumn({
+    super.key,
+    required this.children,
+    required this.separator,
+    this.crossAxisAlignment = CrossAxisAlignment.start,
+  });
+
+  final List<Widget> children;
+  final Widget separator;
+  final CrossAxisAlignment crossAxisAlignment;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: crossAxisAlignment,
+      children: [
+        for (final entry in children.asMap().entries) ...[
+          entry.value,
+          if (entry.key != children.length - 1) separator,
+        ],
+      ],
+    );
+  }
+}
+
 class MetricCard extends StatelessWidget {
   const MetricCard({
     super.key,

@@ -9,37 +9,11 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class HeroPanel extends ConsumerWidget {
+class HeroPanel extends StatelessWidget {
   const HeroPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-
-    final snapshot = ref.watch(monitorSnapshotProvider);
-    final summary = ref.watch(summaryProvider);
-    final fanSummary = ref.watch(fanSummaryProvider);
-    final isRefreshing = ref.watch(monitorIsRefreshingProvider);
-
-    final refreshButtonStyle = FilledButton.styleFrom(
-      minimumSize: const Size(0, 54),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      textStyle: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-      backgroundColor: DashboardColors.heroControlSelected,
-      disabledBackgroundColor: DashboardColors.heroControlIdle,
-      foregroundColor: DashboardColors.heroControlForeground,
-      disabledForegroundColor: Colors.white,
-      side: const BorderSide(color: DashboardColors.heroControlBorder),
-      overlayColor: DashboardColors.heroControlForeground.withValues(
-        alpha: 0.08,
-      ),
-      iconSize: 18,
-    );
-
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
@@ -60,35 +34,11 @@ class HeroPanel extends ConsumerWidget {
             children: [
               const _ViewSwitcher(),
               const Spacer(),
-              FilledButton.icon(
-                onPressed: isRefreshing
-                    ? null
-                    : () => ref.monitorActions.refresh(),
-                style: refreshButtonStyle,
-                icon: Icon(isRefreshing ? Icons.sync : Icons.refresh),
-                label: Text(isRefreshing ? 'Refreshing' : 'Refresh'),
-              ),
+              const _RefreshButton(),
             ],
           ),
           const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              PillChip(
-                icon: Icons.device_thermostat,
-                label: formatTemperature(summary.overallTemperature),
-                color: thermalChipColor(snapshot.thermalLevel),
-                foreground: theme.colorScheme.onPrimary,
-              ),
-              PillChip(
-                icon: Icons.wind_power,
-                label: formatFanSummary(fanSummary),
-                color: fanSummaryChipColor(fanSummary),
-                foreground: theme.colorScheme.onPrimary,
-              ),
-            ],
-          ),
+          const _HeroStatusChips(),
         ],
       ),
     );
@@ -148,6 +98,94 @@ class _ViewSwitcher extends ConsumerWidget {
           ref.viewActions.setView(selection.first);
         }
       },
+    );
+  }
+}
+
+class _RefreshButton extends ConsumerWidget {
+  const _RefreshButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final isRefreshing = ref.watch(monitorIsRefreshingProvider);
+
+    final refreshButtonStyle = FilledButton.styleFrom(
+      minimumSize: const Size(0, 54),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      textStyle: theme.textTheme.labelLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: DashboardColors.heroControlSelected,
+      disabledBackgroundColor: DashboardColors.heroControlIdle,
+      foregroundColor: DashboardColors.heroControlForeground,
+      disabledForegroundColor: Colors.white,
+      side: const BorderSide(color: DashboardColors.heroControlBorder),
+      overlayColor: DashboardColors.heroControlForeground.withValues(
+        alpha: 0.08,
+      ),
+      iconSize: 18,
+    );
+
+    return FilledButton.icon(
+      onPressed: isRefreshing ? null : () => ref.monitorActions.refresh(),
+      style: refreshButtonStyle,
+      icon: Icon(isRefreshing ? Icons.sync : Icons.refresh),
+      label: Text(isRefreshing ? 'Refreshing' : 'Refresh'),
+    );
+  }
+}
+
+class _HeroStatusChips extends StatelessWidget {
+  const _HeroStatusChips();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [_OverallTemperatureChip(), _FanSummaryChip()],
+    );
+  }
+}
+
+class _OverallTemperatureChip extends ConsumerWidget {
+  const _OverallTemperatureChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final overallTemperature = ref.watch(
+      summaryProvider.select((summary) => summary.overallTemperature),
+    );
+    final thermalLevel = ref.watch(
+      monitorSnapshotProvider.select((snapshot) => snapshot.thermalLevel),
+    );
+
+    return PillChip(
+      icon: Icons.device_thermostat,
+      label: formatTemperature(overallTemperature),
+      color: thermalChipColor(thermalLevel),
+      foreground: Theme.of(context).colorScheme.onPrimary,
+    );
+  }
+}
+
+class _FanSummaryChip extends ConsumerWidget {
+  const _FanSummaryChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fanSummary = ref.watch(fanSummaryProvider);
+
+    return PillChip(
+      icon: Icons.wind_power,
+      label: formatFanSummary(fanSummary),
+      color: fanSummaryChipColor(fanSummary),
+      foreground: Theme.of(context).colorScheme.onPrimary,
     );
   }
 }
