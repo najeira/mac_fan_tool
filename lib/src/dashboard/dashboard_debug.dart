@@ -48,19 +48,6 @@ final dashboardDebugOverridesProvider =
       DashboardDebugOverrides
     >(DashboardDebugOverridesController.new);
 
-final dashboardDebugEnabledProvider = Provider<bool>((ref) {
-  return kDebugMode;
-});
-
-final dashboardAppliedDebugOverridesProvider =
-    Provider<DashboardDebugOverrides>((ref) {
-      if (!ref.watch(dashboardDebugEnabledProvider)) {
-        return const DashboardDebugOverrides();
-      }
-
-      return ref.watch(dashboardDebugOverridesProvider);
-    });
-
 class DashboardDebugOverridesController
     extends Notifier<DashboardDebugOverrides> {
   @override
@@ -101,6 +88,9 @@ class DashboardDebugPanel extends ConsumerWidget {
     final overrides = ref.watch(dashboardDebugOverridesProvider);
     final actions = ref.read(dashboardDebugOverridesProvider.notifier);
 
+    if (!kDebugMode) {
+      return const SizedBox.shrink();
+    }
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(16),

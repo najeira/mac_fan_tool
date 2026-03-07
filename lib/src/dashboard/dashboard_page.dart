@@ -48,8 +48,6 @@ class _DashboardLayout extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final debugEnabled = ref.watch(dashboardDebugEnabledProvider);
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1180;
@@ -57,12 +55,12 @@ class _DashboardLayout extends ConsumerWidget {
           overrides: [dashboardIsWideProvider.overrideWithValue(isWide)],
           child: ListView(
             padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
-            children: [
-              if (debugEnabled) const DashboardDebugPanel(),
-              const DashboardHeroPanel(),
-              const _DashboardStatusBanners(),
-              const SizedBox(height: 26),
-              const _DashboardBody(),
+            children: const [
+              DashboardDebugPanel(),
+              DashboardHeroPanel(),
+              _DashboardStatusBanners(),
+              SizedBox(height: 26),
+              _DashboardBody(),
             ],
           ),
         );

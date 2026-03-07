@@ -28,7 +28,7 @@ final monitorCapabilitiesProvider = Provider<HardwareCapabilitiesData>((ref) {
 });
 
 final monitorIsRefreshingProvider = Provider<bool>((ref) {
-  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
   if (debugOverrides.showRefreshing) {
     return true;
   }
@@ -39,7 +39,7 @@ final monitorIsRefreshingProvider = Provider<bool>((ref) {
 });
 
 final monitorIsBootstrappingProvider = Provider<bool>((ref) {
-  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
   if (debugOverrides.showBootstrapping) {
     return true;
   }
@@ -50,7 +50,7 @@ final monitorIsBootstrappingProvider = Provider<bool>((ref) {
 });
 
 final monitorErrorMessageProvider = Provider<String?>((ref) {
-  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
   if (debugOverrides.showError) {
     return 'Debug override: native bridge reported an injected error state.';
   }
@@ -61,7 +61,7 @@ final monitorErrorMessageProvider = Provider<String?>((ref) {
 });
 
 final monitorLastCommandMessageProvider = Provider<String?>((ref) {
-  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
   if (debugOverrides.showSuccess) {
     return 'Debug override: fan command completed successfully.';
   }
@@ -83,7 +83,7 @@ final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
 });
 
 final dashboardHardwareNoteProvider = Provider<String?>((ref) {
-  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
   if (debugOverrides.showHardwareNote) {
     return 'Debug override: showing a simulated hardware note for layout testing.';
   }
