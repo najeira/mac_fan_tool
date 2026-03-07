@@ -67,9 +67,7 @@ class SectionPanel extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: DashboardColors.textSecondary,
             ),
           ),
@@ -111,30 +109,21 @@ class MetricCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ColorDot(color: accentColor),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        label,
-                        style: textTheme.labelLarge?.copyWith(
-                          color: accentColor,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+              ColorDot(color: accentColor),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: accentColor,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
+              const SizedBox(width: 12),
               Flexible(
                 child: Text(
                   caption,
-                  textAlign: TextAlign.end,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: textTheme.bodySmall?.copyWith(
                     color: DashboardColors.textCaption,
                   ),
@@ -145,9 +134,9 @@ class MetricCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             value,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            style: textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -331,9 +320,7 @@ class SensorRow extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 sensor.stableId,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: DashboardColors.textSubtle,
                 ),
               ),

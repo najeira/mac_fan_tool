@@ -73,7 +73,7 @@ class OverviewView extends ConsumerWidget {
 }
 
 class _ThermalTrendPanel extends ConsumerWidget {
-  const _ThermalTrendPanel({super.key});
+  const _ThermalTrendPanel();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -83,12 +83,13 @@ class _ThermalTrendPanel extends ConsumerWidget {
         .map((snapshot) => DashboardSummary.fromSnapshot(snapshot))
         .toList();
     final series = _buildTrendSeries(summaries);
+    final isEmpty = series.every((item) => item.spots.length < 2);
 
     return SectionPanel(
       title: 'Thermal Trend',
       subtitle:
           'Composite, CPU average, and GPU average over the recent polling window.',
-      child: series.every((item) => item.spots.length < 2)
+      child: isEmpty
           ? const EmptyPanel(
               icon: Icons.show_chart,
               message:
@@ -212,12 +213,12 @@ List<_TrendSeries> _buildTrendSeries(List<DashboardSummary> summaries) {
       spots: buildSpots((summary) => summary.overallTemperature),
     ),
     _TrendSeries(
-      label: 'CPU Avg',
+      label: 'CPU',
       color: DashboardColors.info,
       spots: buildSpots((summary) => summary.cpuAverage),
     ),
     _TrendSeries(
-      label: 'GPU Avg',
+      label: 'GPU',
       color: DashboardColors.gpu,
       spots: buildSpots((summary) => summary.gpuAverage),
     ),
