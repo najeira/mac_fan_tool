@@ -1,12 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 
-extension DashboardWidgetRefX on WidgetRef {
+extension WidgetRefActionsX on WidgetRef {
   MonitorController get monitorActions =>
       read(monitorControllerProvider.notifier);
 
-  DashboardViewController get dashboardViewActions =>
-      read(dashboardViewProvider.notifier);
+  ViewController get viewActions => read(viewProvider.notifier);
+
+  DebugFlagsController get debugFlagsActions => read(debugFlagsProvider.notifier);
 }

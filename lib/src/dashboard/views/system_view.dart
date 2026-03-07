@@ -13,7 +13,7 @@ class SystemView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isWide = ref.watch(dashboardIsWideProvider);
+    final isWide = ref.watch(isWideProvider);
     const infoPanel = _SystemInfoPanel();
     const fansPanel = _FansPanel();
 
@@ -43,7 +43,7 @@ class _SystemInfoPanel extends ConsumerWidget {
     final device = ref.watch(monitorDeviceProvider);
     final capabilities = ref.watch(monitorCapabilitiesProvider);
     final snapshot = ref.watch(monitorSnapshotProvider);
-    final summary = ref.watch(dashboardSummaryProvider);
+    final summary = ref.watch(summaryProvider);
 
     return SectionPanel(
       title: 'Hardware Bridge',

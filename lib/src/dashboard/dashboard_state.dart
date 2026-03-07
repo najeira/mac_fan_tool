@@ -5,7 +5,7 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-final dashboardIsWideProvider = Provider<bool>((ref) {
+final isWideProvider = Provider<bool>((ref) {
   return false;
 }, dependencies: const []);
 
@@ -28,8 +28,8 @@ final monitorCapabilitiesProvider = Provider<HardwareCapabilitiesData>((ref) {
 });
 
 final monitorIsRefreshingProvider = Provider<bool>((ref) {
-  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
-  if (debugOverrides.showRefreshing) {
+  final debugFlags = ref.watch(debugFlagsProvider);
+  if (debugFlags.showRefreshing) {
     return true;
   }
 
@@ -39,8 +39,8 @@ final monitorIsRefreshingProvider = Provider<bool>((ref) {
 });
 
 final monitorIsBootstrappingProvider = Provider<bool>((ref) {
-  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
-  if (debugOverrides.showBootstrapping) {
+  final debugFlags = ref.watch(debugFlagsProvider);
+  if (debugFlags.showBootstrapping) {
     return true;
   }
 
@@ -50,8 +50,8 @@ final monitorIsBootstrappingProvider = Provider<bool>((ref) {
 });
 
 final monitorErrorMessageProvider = Provider<String?>((ref) {
-  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
-  if (debugOverrides.showError) {
+  final debugFlags = ref.watch(debugFlagsProvider);
+  if (debugFlags.showError) {
     return 'Debug override: native bridge reported an injected error state.';
   }
 
@@ -61,8 +61,8 @@ final monitorErrorMessageProvider = Provider<String?>((ref) {
 });
 
 final monitorLastCommandMessageProvider = Provider<String?>((ref) {
-  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
-  if (debugOverrides.showSuccess) {
+  final debugFlags = ref.watch(debugFlagsProvider);
+  if (debugFlags.showSuccess) {
     return 'Debug override: fan command completed successfully.';
   }
 
@@ -82,20 +82,20 @@ final monitorHasInitialSnapshotProvider = Provider<bool>((ref) {
   return (snapshot.capturedAtEpochMs ?? 0) > 0;
 });
 
-final dashboardShowLoadingPanelProvider = Provider<bool>((ref) {
+final showLoadingPanelProvider = Provider<bool>((ref) {
   final isBootstrapping = ref.watch(monitorIsBootstrappingProvider);
   final hasSnapshot = ref.watch(monitorHasInitialSnapshotProvider);
   return isBootstrapping || !hasSnapshot;
 });
 
-final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
+final summaryProvider = Provider<DashboardSummary>((ref) {
   final snapshot = ref.watch(monitorSnapshotProvider);
   return DashboardSummary.fromSnapshot(snapshot);
 });
 
-final dashboardHardwareNoteProvider = Provider<String?>((ref) {
-  final debugOverrides = ref.watch(dashboardDebugOverridesProvider);
-  if (debugOverrides.showHardwareNote) {
+final hardwareNoteProvider = Provider<String?>((ref) {
+  final debugFlags = ref.watch(debugFlagsProvider);
+  if (debugFlags.showHardwareNote) {
     return 'Debug override: showing a simulated hardware note for layout testing.';
   }
 

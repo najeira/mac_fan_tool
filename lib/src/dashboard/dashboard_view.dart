@@ -2,12 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum DashboardView { overview, details, system }
 
-final dashboardViewProvider =
-    NotifierProvider<DashboardViewController, DashboardView>(
-      DashboardViewController.new,
-    );
+final viewProvider = NotifierProvider<ViewController, DashboardView>(
+  ViewController.new,
+);
 
-class DashboardViewController extends Notifier<DashboardView> {
+class ViewController extends Notifier<DashboardView> {
   @override
   DashboardView build() {
     return DashboardView.overview;

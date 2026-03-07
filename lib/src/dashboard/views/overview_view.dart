@@ -15,10 +15,10 @@ class OverviewView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isWide = ref.watch(dashboardIsWideProvider);
+    final isWide = ref.watch(isWideProvider);
     final snapshot = ref.watch(monitorSnapshotProvider);
     final history = ref.watch(monitorHistoryProvider);
-    final summary = ref.watch(dashboardSummaryProvider);
+    final summary = ref.watch(summaryProvider);
 
     final cards = [
       MetricCard(

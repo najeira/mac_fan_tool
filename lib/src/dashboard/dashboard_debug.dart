@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class DashboardDebugOverrides {
-  const DashboardDebugOverrides({
+import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
+
+class DebugFlags {
+  const DebugFlags({
     this.showBootstrapping = false,
     this.showRefreshing = false,
     this.showError = false,
@@ -17,14 +19,14 @@ class DashboardDebugOverrides {
   final bool showSuccess;
   final bool showHardwareNote;
 
-  DashboardDebugOverrides copyWith({
+  DebugFlags copyWith({
     bool? showBootstrapping,
     bool? showRefreshing,
     bool? showError,
     bool? showSuccess,
     bool? showHardwareNote,
   }) {
-    return DashboardDebugOverrides(
+    return DebugFlags(
       showBootstrapping: showBootstrapping ?? this.showBootstrapping,
       showRefreshing: showRefreshing ?? this.showRefreshing,
       showError: showError ?? this.showError,
@@ -42,17 +44,14 @@ class DashboardDebugOverrides {
   }
 }
 
-final dashboardDebugOverridesProvider =
-    NotifierProvider<
-      DashboardDebugOverridesController,
-      DashboardDebugOverrides
-    >(DashboardDebugOverridesController.new);
+final debugFlagsProvider = NotifierProvider<DebugFlagsController, DebugFlags>(
+      DebugFlagsController.new,
+    );
 
-class DashboardDebugOverridesController
-    extends Notifier<DashboardDebugOverrides> {
+class DebugFlagsController extends Notifier<DebugFlags> {
   @override
-  DashboardDebugOverrides build() {
-    return const DashboardDebugOverrides();
+  DebugFlags build() {
+    return const DebugFlags();
   }
 
   void toggleBootstrapping() {
@@ -76,17 +75,16 @@ class DashboardDebugOverridesController
   }
 
   void clear() {
-    state = const DashboardDebugOverrides();
+    state = const DebugFlags();
   }
 }
 
-class DashboardDebugPanel extends ConsumerWidget {
-  const DashboardDebugPanel({super.key});
+class DebugPanel extends ConsumerWidget {
+  const DebugPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final overrides = ref.watch(dashboardDebugOverridesProvider);
-    final actions = ref.read(dashboardDebugOverridesProvider.notifier);
+    final flags = ref.watch(debugFlagsProvider);
 
     if (!kDebugMode) {
       return const SizedBox.shrink();
@@ -104,14 +102,14 @@ class DashboardDebugPanel extends ConsumerWidget {
           Row(
             children: [
               Text(
-                'Debug Overrides',
+                'Debug Flags',
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               TextButton(
-                onPressed: overrides.isEmpty ? null : actions.clear,
+                onPressed: flags.isEmpty ? null : ref.debugFlagsActions.clear,
                 child: const Text('Clear'),
               ),
             ],
@@ -123,28 +121,28 @@ class DashboardDebugPanel extends ConsumerWidget {
             children: [
               FilterChip(
                 label: const Text('Bootstrapping'),
-                selected: overrides.showBootstrapping,
-                onSelected: (_) => actions.toggleBootstrapping(),
+                selected: flags.showBootstrapping,
+                onSelected: (_) => ref.debugFlagsActions.toggleBootstrapping(),
               ),
               FilterChip(
                 label: const Text('Refreshing'),
-                selected: overrides.showRefreshing,
-                onSelected: (_) => actions.toggleRefreshing(),
+                selected: flags.showRefreshing,
+                onSelected: (_) => ref.debugFlagsActions.toggleRefreshing(),
               ),
               FilterChip(
                 label: const Text('Error Banner'),
-                selected: overrides.showError,
-                onSelected: (_) => actions.toggleError(),
+                selected: flags.showError,
+                onSelected: (_) => ref.debugFlagsActions.toggleError(),
               ),
               FilterChip(
                 label: const Text('Success Banner'),
-                selected: overrides.showSuccess,
-                onSelected: (_) => actions.toggleSuccess(),
+                selected: flags.showSuccess,
+                onSelected: (_) => ref.debugFlagsActions.toggleSuccess(),
               ),
               FilterChip(
                 label: const Text('Hardware Note'),
-                selected: overrides.showHardwareNote,
-                onSelected: (_) => actions.toggleHardwareNote(),
+                selected: flags.showHardwareNote,
+                onSelected: (_) => ref.debugFlagsActions.toggleHardwareNote(),
               ),
             ],
           ),

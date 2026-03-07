@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 
-class DashboardLoadingPanel extends ConsumerWidget {
-  const DashboardLoadingPanel({super.key});
+class LoadingPanel extends ConsumerWidget {
+  const LoadingPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

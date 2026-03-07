@@ -8,13 +8,13 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class DashboardHeroPanel extends ConsumerWidget {
-  const DashboardHeroPanel({super.key});
+class HeroPanel extends ConsumerWidget {
+  const HeroPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(monitorSnapshotProvider);
-    final summary = ref.watch(dashboardSummaryProvider);
+    final summary = ref.watch(summaryProvider);
     final isRefreshing = ref.watch(monitorIsRefreshingProvider);
     final foreground = Theme.of(context).colorScheme.onPrimary;
 
@@ -36,7 +36,7 @@ class DashboardHeroPanel extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const _DashboardViewSwitcher(),
+              const _ViewSwitcher(),
               const Spacer(),
               FilledButton.icon(
                 onPressed: isRefreshing
@@ -78,12 +78,12 @@ class DashboardHeroPanel extends ConsumerWidget {
   }
 }
 
-class _DashboardViewSwitcher extends ConsumerWidget {
-  const _DashboardViewSwitcher();
+class _ViewSwitcher extends ConsumerWidget {
+  const _ViewSwitcher();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedView = ref.watch(dashboardViewProvider);
+    final selectedView = ref.watch(viewProvider);
 
     return SegmentedButton<DashboardView>(
       segments: const [
@@ -128,7 +128,7 @@ class _DashboardViewSwitcher extends ConsumerWidget {
       ),
       onSelectionChanged: (selection) {
         if (selection.isNotEmpty) {
-          ref.dashboardViewActions.setView(selection.first);
+          ref.viewActions.setView(selection.first);
         }
       },
     );

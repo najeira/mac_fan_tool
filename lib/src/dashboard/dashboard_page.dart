@@ -49,23 +49,23 @@ class _DashboardLayout extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final showLoadingPanel = ref.watch(dashboardShowLoadingPanelProvider);
+    final showLoadingPanel = ref.watch(showLoadingPanelProvider);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1180;
         return ProviderScope(
-          overrides: [dashboardIsWideProvider.overrideWithValue(isWide)],
+          overrides: [isWideProvider.overrideWithValue(isWide)],
           child: ListView(
             padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
             children: [
-              const DashboardDebugPanel(),
+              const DebugPanel(),
               const _DashboardStatusBanners(),
               const SizedBox(height: 26),
               if (showLoadingPanel) ...const [
-                DashboardLoadingPanel(),
+                LoadingPanel(),
               ] else ...const [
-                DashboardHeroPanel(),
+                HeroPanel(),
                 SizedBox(height: 26),
                 _DashboardBody(),
               ],
@@ -82,7 +82,7 @@ class _DashboardBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final view = ref.watch(dashboardViewProvider);
+    final view = ref.watch(viewProvider);
 
     switch (view) {
       case DashboardView.overview:
@@ -102,7 +102,7 @@ class _DashboardStatusBanners extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final errorMessage = ref.watch(monitorErrorMessageProvider);
     final lastCommandMessage = ref.watch(monitorLastCommandMessageProvider);
-    final hardwareNote = ref.watch(dashboardHardwareNoteProvider);
+    final hardwareNote = ref.watch(hardwareNoteProvider);
 
     final children = [
       if (errorMessage != null)
