@@ -57,11 +57,11 @@ class _DashboardLayout extends ConsumerWidget {
 
     return ResponsiveDashboardScope(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
+        padding: const EdgeInsets.fromLTRB(28, 44, 28, 36),
         children: [
           // const DebugPanel(),
           const _DashboardStatusBanners(),
-          const SizedBox(height: 26),
+          const SizedBox(height: 18),
           if (showLoadingPanel) ...const [LoadingPanel()] else ...const [
             HeroPanel(),
             SizedBox(height: 26),
