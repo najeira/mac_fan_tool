@@ -61,9 +61,9 @@ class MonitorController extends Notifier<MonitorState> {
     }
   }
 
-  Future<void> refresh({bool showSpinner = true}) async {
+  Future<bool> refresh({bool showSpinner = true}) async {
     if (_refreshInFlight) {
-      return;
+      return true;
     }
 
     _refreshInFlight = true;
@@ -77,11 +77,13 @@ class MonitorController extends Notifier<MonitorState> {
         isRefreshing: false,
         errorMessage: null,
       );
+      return true;
     } catch (error) {
       state = state.copyWith(
         isRefreshing: false,
         errorMessage: 'Telemetry refresh failed: $error',
       );
+      return false;
     } finally {
       _refreshInFlight = false;
     }
@@ -137,13 +139,20 @@ class MonitorController extends Notifier<MonitorState> {
 
     try {
       await action();
+      final refreshSucceeded = await refresh(showSpinner: false);
       state = state.copyWith(
         activeFanCommandIds: _removeActiveFanCommandId(fanId),
       );
       _showTransientNotice(
-        MonitorNotice(tone: MonitorNoticeTone.success, message: successMessage),
+        MonitorNotice(
+          tone: refreshSucceeded
+              ? MonitorNoticeTone.success
+              : MonitorNoticeTone.info,
+          message: refreshSucceeded
+              ? successMessage
+              : '$successMessage Telemetry refresh failed, so the dashboard may be stale.',
+        ),
       );
-      await refresh(showSpinner: false);
     } catch (error) {
       state = state.copyWith(
         activeFanCommandIds: _removeActiveFanCommandId(fanId),

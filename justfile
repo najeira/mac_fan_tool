@@ -29,7 +29,7 @@ test:
   flutter test
 
 test-macos:
-  xcodebuild test -workspace "{{xcode_workspace}}" -scheme "{{xcode_scheme}}" -destination 'platform=macOS,arch=arm64' -derivedDataPath "{{macos_test_derived_data}}" CODE_SIGNING_ALLOWED=NO
+  xcodebuild test -workspace "{{xcode_workspace}}" -scheme "{{xcode_scheme}}" -destination 'platform=macOS,arch=arm64' -derivedDataPath "{{macos_test_derived_data}}"
 
 format:
   dart format .
