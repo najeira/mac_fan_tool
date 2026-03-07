@@ -7,13 +7,18 @@ import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_repository.dart';
 
 void main() {
-  test('fan command errors survive silent refreshes', () async {
+  test('fan command notices auto-dismiss after their lifetime', () async {
     final repository = _FakeHardwareRepository(
       snapshots: [_sampleSnapshot(), _sampleSnapshot()],
       setFanModeError: StateError('native write failed'),
     );
     final container = ProviderContainer(
-      overrides: [hardwareRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        hardwareRepositoryProvider.overrideWithValue(repository),
+        transientNoticeDurationProvider.overrideWithValue(
+          const Duration(milliseconds: 10),
+        ),
+      ],
     );
     addTearDown(container.dispose);
 
@@ -25,17 +30,16 @@ void main() {
 
     await controller.setFanTargetRpm(fan, 2400);
 
+    final notice = container.read(monitorTransientNoticeProvider);
+    expect(notice?.tone, MonitorNoticeTone.error);
     expect(
-      container.read(monitorCommandErrorMessageProvider),
+      notice?.message,
       'Fan command failed: Bad state: native write failed',
     );
 
-    await controller.refresh(showSpinner: false);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
 
-    expect(
-      container.read(monitorCommandErrorMessageProvider),
-      'Fan command failed: Bad state: native write failed',
-    );
+    expect(container.read(monitorTransientNoticeProvider), isNull);
   });
 }
 

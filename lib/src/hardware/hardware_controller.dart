@@ -12,16 +12,24 @@ final hardwareRepositoryProvider = Provider<HardwareRepository>((ref) {
 final monitorControllerProvider =
     NotifierProvider<MonitorController, MonitorState>(MonitorController.new);
 
+final transientNoticeDurationProvider = Provider<Duration>((ref) {
+  return const Duration(seconds: 4);
+});
+
 class MonitorController extends Notifier<MonitorState> {
   Timer? _pollTimer;
+  Timer? _transientNoticeTimer;
   bool _refreshInFlight = false;
 
   HardwareRepository get _repository => ref.read(hardwareRepositoryProvider);
+  Duration get _transientNoticeDuration =>
+      ref.read(transientNoticeDurationProvider);
 
   @override
   MonitorState build() {
     ref.onDispose(() {
       _pollTimer?.cancel();
+      _transientNoticeTimer?.cancel();
     });
     unawaited(_bootstrap());
     return MonitorState.initial();
@@ -81,9 +89,11 @@ class MonitorController extends Notifier<MonitorState> {
   Future<void> setFanAutomatic(FanReadingData fan) async {
     final fanId = fan.id;
     if (fanId == null || fanId.isEmpty) {
-      state = state.copyWith(
-        commandErrorMessage: 'Fan command failed: missing fan id.',
-        lastCommandMessage: null,
+      _showTransientNotice(
+        const MonitorNotice(
+          tone: MonitorNoticeTone.error,
+          message: 'Fan command failed: missing fan id.',
+        ),
       );
       return;
     }
@@ -98,9 +108,11 @@ class MonitorController extends Notifier<MonitorState> {
   Future<void> setFanTargetRpm(FanReadingData fan, int targetRpm) async {
     final fanId = fan.id;
     if (fanId == null || fanId.isEmpty) {
-      state = state.copyWith(
-        commandErrorMessage: 'Fan command failed: missing fan id.',
-        lastCommandMessage: null,
+      _showTransientNotice(
+        const MonitorNotice(
+          tone: MonitorNoticeTone.error,
+          message: 'Fan command failed: missing fan id.',
+        ),
       );
       return;
     }
@@ -124,27 +136,44 @@ class MonitorController extends Notifier<MonitorState> {
     Future<void> Function() action, {
     required String successMessage,
   }) async {
-    state = state.copyWith(
-      activeFanCommandId: fanId,
-      commandErrorMessage: null,
-      errorMessage: null,
-      lastCommandMessage: null,
-    );
+    _clearTransientNotice();
+    state = state.copyWith(activeFanCommandId: fanId, errorMessage: null);
 
     try {
       await action();
-      state = state.copyWith(
-        activeFanCommandId: null,
-        commandErrorMessage: null,
-        lastCommandMessage: successMessage,
+      state = state.copyWith(activeFanCommandId: null);
+      _showTransientNotice(
+        MonitorNotice(tone: MonitorNoticeTone.success, message: successMessage),
       );
       await refresh(showSpinner: false);
     } catch (error) {
-      state = state.copyWith(
-        activeFanCommandId: null,
-        commandErrorMessage: 'Fan command failed: $error',
+      state = state.copyWith(activeFanCommandId: null);
+      _showTransientNotice(
+        MonitorNotice(
+          tone: MonitorNoticeTone.error,
+          message: 'Fan command failed: $error',
+        ),
       );
     }
+  }
+
+  void dismissTransientNotice() {
+    _clearTransientNotice();
+  }
+
+  void _showTransientNotice(MonitorNotice notice) {
+    _transientNoticeTimer?.cancel();
+    state = state.copyWith(transientNotice: notice);
+    _transientNoticeTimer = Timer(
+      _transientNoticeDuration,
+      _clearTransientNotice,
+    );
+  }
+
+  void _clearTransientNotice() {
+    _transientNoticeTimer?.cancel();
+    _transientNoticeTimer = null;
+    state = state.copyWith(transientNotice: null);
   }
 
   List<HardwareSnapshotData> _appendHistory(HardwareSnapshotData snapshot) {

@@ -117,9 +117,8 @@ class MonitorState {
     required this.isBootstrapping,
     required this.isRefreshing,
     this.activeFanCommandId,
-    this.commandErrorMessage,
     this.errorMessage,
-    this.lastCommandMessage,
+    this.transientNotice,
   });
 
   factory MonitorState.initial() {
@@ -144,9 +143,8 @@ class MonitorState {
   final bool isBootstrapping;
   final bool isRefreshing;
   final String? activeFanCommandId;
-  final String? commandErrorMessage;
   final String? errorMessage;
-  final String? lastCommandMessage;
+  final MonitorNotice? transientNotice;
 
   MonitorState copyWith({
     DeviceMetadata? device,
@@ -156,9 +154,8 @@ class MonitorState {
     bool? isBootstrapping,
     bool? isRefreshing,
     Object? activeFanCommandId = _sentinel,
-    Object? commandErrorMessage = _sentinel,
     Object? errorMessage = _sentinel,
-    Object? lastCommandMessage = _sentinel,
+    Object? transientNotice = _sentinel,
   }) {
     return MonitorState(
       device: device ?? this.device,
@@ -170,15 +167,21 @@ class MonitorState {
       activeFanCommandId: identical(activeFanCommandId, _sentinel)
           ? this.activeFanCommandId
           : activeFanCommandId as String?,
-      commandErrorMessage: identical(commandErrorMessage, _sentinel)
-          ? this.commandErrorMessage
-          : commandErrorMessage as String?,
       errorMessage: identical(errorMessage, _sentinel)
           ? this.errorMessage
           : errorMessage as String?,
-      lastCommandMessage: identical(lastCommandMessage, _sentinel)
-          ? this.lastCommandMessage
-          : lastCommandMessage as String?,
+      transientNotice: identical(transientNotice, _sentinel)
+          ? this.transientNotice
+          : transientNotice as MonitorNotice?,
     );
   }
+}
+
+enum MonitorNoticeTone { info, success, error }
+
+class MonitorNotice {
+  const MonitorNotice({required this.tone, required this.message});
+
+  final MonitorNoticeTone tone;
+  final String message;
 }

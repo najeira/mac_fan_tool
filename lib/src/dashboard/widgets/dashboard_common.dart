@@ -250,10 +250,16 @@ class PillChip extends StatelessWidget {
 }
 
 class NoticeBanner extends StatelessWidget {
-  const NoticeBanner({super.key, required this.tone, required this.message});
+  const NoticeBanner({
+    super.key,
+    required this.tone,
+    required this.message,
+    this.onDismiss,
+  });
 
   final NoticeTone tone;
   final String message;
+  final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -273,12 +279,27 @@ class NoticeBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
-      child: Text(
-        message,
-        style: textTheme.bodyMedium?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              style: textTheme.bodyMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (onDismiss != null) ...[
+            const SizedBox(width: 12),
+            IconButton(
+              onPressed: onDismiss,
+              icon: Icon(Icons.close, color: color, size: 18),
+              splashRadius: 18,
+              tooltip: 'Dismiss',
+            ),
+          ],
+        ],
       ),
     );
   }

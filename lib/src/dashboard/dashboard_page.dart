@@ -12,6 +12,8 @@ import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_hero_panel.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_loading_panel.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/responsive_dashboard_scope.dart';
+import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
+import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -60,7 +62,8 @@ class _DashboardLayout extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(28, 44, 28, 36),
         children: [
           // const DebugPanel(),
-          const _DashboardStatusBanners(),
+          const _DashboardTransientNoticeSection(),
+          const _DashboardPersistentStatusSection(),
           const SizedBox(height: 18),
           if (showLoadingPanel) ...const [LoadingPanel()] else ...const [
             HeroPanel(),
@@ -91,33 +94,46 @@ class _DashboardBody extends ConsumerWidget {
   }
 }
 
-class _DashboardStatusBanners extends ConsumerWidget {
-  const _DashboardStatusBanners();
+class _DashboardTransientNoticeSection extends ConsumerWidget {
+  const _DashboardTransientNoticeSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final commandErrorMessage = ref.watch(monitorCommandErrorMessageProvider);
-    final errorMessage = ref.watch(monitorErrorMessageProvider);
-    final lastCommandMessage = ref.watch(monitorLastCommandMessageProvider);
-    final hardwareNote = ref.watch(hardwareNoteProvider);
+    final notice = ref.watch(monitorTransientNoticeProvider);
+    if (notice == null) {
+      return const SizedBox.shrink();
+    }
 
-    final children = [
-      if (commandErrorMessage != null)
-        NoticeBanner(tone: NoticeTone.error, message: commandErrorMessage),
-      if (errorMessage != null)
-        NoticeBanner(tone: NoticeTone.error, message: errorMessage),
-      if (lastCommandMessage != null)
-        NoticeBanner(tone: NoticeTone.success, message: lastCommandMessage),
-      if (hardwareNote != null)
-        NoticeBanner(tone: NoticeTone.info, message: hardwareNote),
-    ];
-    if (children.isEmpty) {
+    return NoticeBanner(
+      tone: switch (notice.tone) {
+        MonitorNoticeTone.info => NoticeTone.info,
+        MonitorNoticeTone.success => NoticeTone.success,
+        MonitorNoticeTone.error => NoticeTone.error,
+      },
+      message: notice.message,
+      onDismiss: ref
+          .read(monitorControllerProvider.notifier)
+          .dismissTransientNotice,
+    );
+  }
+}
+
+class _DashboardPersistentStatusSection extends ConsumerWidget {
+  const _DashboardPersistentStatusSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final banners = ref.watch(persistentStatusBannersProvider);
+    if (banners.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return SeparatedColumn(
       separator: const SizedBox(height: 18),
-      children: children,
+      children: [
+        for (final banner in banners)
+          NoticeBanner(tone: banner.$1, message: banner.$2),
+      ],
     );
   }
 }

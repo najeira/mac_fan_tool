@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/dashboard/thermal_trend.dart';
+import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
@@ -61,25 +62,17 @@ final monitorErrorMessageProvider = Provider<String?>((ref) {
   );
 });
 
-final monitorCommandErrorMessageProvider = Provider<String?>((ref) {
-  final debugFlags = ref.watch(debugFlagsProvider);
-  if (debugFlags.showError) {
-    return 'Debug override: native bridge reported an injected error state.';
-  }
-
-  return ref.watch(
-    monitorControllerProvider.select((state) => state.commandErrorMessage),
-  );
-});
-
-final monitorLastCommandMessageProvider = Provider<String?>((ref) {
+final monitorTransientNoticeProvider = Provider<MonitorNotice?>((ref) {
   final debugFlags = ref.watch(debugFlagsProvider);
   if (debugFlags.showSuccess) {
-    return 'Debug override: fan command completed successfully.';
+    return const MonitorNotice(
+      tone: MonitorNoticeTone.success,
+      message: 'Debug override: fan command completed successfully.',
+    );
   }
 
   return ref.watch(
-    monitorControllerProvider.select((state) => state.lastCommandMessage),
+    monitorControllerProvider.select((state) => state.transientNotice),
   );
 });
 
@@ -152,4 +145,16 @@ final hardwareNoteProvider = Provider<String?>((ref) {
   );
 
   return notes.snapshotNote ?? notes.capabilitiesNote ?? notes.deviceNote;
+});
+
+final persistentStatusBannersProvider = Provider<List<(NoticeTone, String)>>((
+  ref,
+) {
+  final errorMessage = ref.watch(monitorErrorMessageProvider);
+  final hardwareNote = ref.watch(hardwareNoteProvider);
+
+  return [
+    if (errorMessage != null) (NoticeTone.error, errorMessage),
+    if (hardwareNote != null) (NoticeTone.info, hardwareNote),
+  ];
 });
