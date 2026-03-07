@@ -48,3 +48,4 @@ app.*.map.json
 macos/Runner/Configs/Signing.xcconfig
 .env
 MacFanTool.zip
+MacFanTool-notary.zip
