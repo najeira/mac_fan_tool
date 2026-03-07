@@ -14,6 +14,7 @@ class SystemView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isWide = ref.watch(isWideProvider);
+
     const infoPanel = _SystemInfoPanel();
     const fansPanel = _FansPanel();
 
@@ -42,8 +43,10 @@ class _SystemInfoPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final device = ref.watch(monitorDeviceProvider);
     final capabilities = ref.watch(monitorCapabilitiesProvider);
-    final snapshot = ref.watch(monitorSnapshotProvider);
     final summary = ref.watch(summaryProvider);
+    final fanReadingsLength = ref.watch(
+      monitorSnapshotProvider.select((snapshot) => snapshot.fanReadings.length),
+    );
 
     return SectionPanel(
       title: 'Hardware Bridge',
@@ -71,7 +74,7 @@ class _SystemInfoPanel extends ConsumerWidget {
           KeyValueRow(
             label: 'Fans',
             value: capabilities.fanTelemetryAvailable
-                ? '${snapshot.fanReadings.length} reported'
+                ? '$fanReadingsLength devices'
                 : 'Unavailable',
           ),
           const Divider(height: 24),
@@ -95,14 +98,16 @@ class _FansPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final snapshot = ref.watch(monitorSnapshotProvider);
+    final fanReadings = ref.watch(
+      monitorSnapshotProvider.select((snapshot) => snapshot.fanReadings),
+    );
     final capabilities = ref.watch(monitorCapabilitiesProvider);
     final activeFanCommandId = ref.watch(monitorActiveFanCommandIdProvider);
 
     return SectionPanel(
       title: 'Fans',
       subtitle: 'Current fan telemetry and manual RPM controls.',
-      child: snapshot.fanReadings.isEmpty
+      child: fanReadings.isEmpty
           ? const EmptyPanel(
               icon: Icons.wind_power,
               message:
@@ -110,18 +115,21 @@ class _FansPanel extends ConsumerWidget {
             )
           : Column(
               children: [
-                for (final fan in snapshot.fanReadings) ...[
-                  FanControlCard(
-                    fan: fan,
-                    canControl: capabilities.fanControlEnabled,
-                    isBusy: activeFanCommandId == fan.stableId,
-                    onAutomatic: () => ref.monitorActions.setFanAutomatic(fan),
-                    onManualTargetSelected: (targetRpm) =>
-                        ref.monitorActions.setFanTargetRpm(fan, targetRpm),
+                for (final fan in fanReadings)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: fan != fanReadings.last ? 16 : 0,
+                    ),
+                    child: FanControlCard(
+                      fan: fan,
+                      canControl: capabilities.fanControlEnabled,
+                      isBusy: activeFanCommandId == fan.stableId,
+                      onAutomatic: () =>
+                          ref.monitorActions.setFanAutomatic(fan),
+                      onManualTargetSelected: (targetRpm) =>
+                          ref.monitorActions.setFanTargetRpm(fan, targetRpm),
+                    ),
                   ),
-                  if (fan != snapshot.fanReadings.last)
-                    const SizedBox(height: 16),
-                ],
               ],
             ),
     );

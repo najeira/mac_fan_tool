@@ -63,7 +63,7 @@ class _DashboardLayout extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
             children: [
-              const DebugPanel(),
+              // const DebugPanel(),
               const _DashboardStatusBanners(),
               const SizedBox(height: 26),
               if (showLoadingPanel) ...const [
