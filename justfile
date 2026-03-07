@@ -2,6 +2,9 @@ set dotenv-load := true
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 app_name := "MacFanTool"
+xcode_workspace := "macos/Runner.xcworkspace"
+xcode_scheme := "Runner"
+macos_test_derived_data := "/tmp/mac_fan_tool-native-tests"
 build_dir := "build/macos/Build/Products/Release"
 dist_dir := "build/dist"
 app_file := build_dir + "/" + app_name + ".app"
@@ -24,6 +27,9 @@ build-release:
 
 test:
   flutter test
+
+test-macos:
+  xcodebuild test -workspace "{{xcode_workspace}}" -scheme "{{xcode_scheme}}" -destination 'platform=macOS,arch=arm64' -derivedDataPath "{{macos_test_derived_data}}" CODE_SIGNING_ALLOWED=NO
 
 format:
   dart format .
