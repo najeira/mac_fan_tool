@@ -82,7 +82,8 @@ class MonitorController extends Notifier<MonitorState> {
     final fanId = fan.id;
     if (fanId == null || fanId.isEmpty) {
       state = state.copyWith(
-        errorMessage: 'Fan command failed: missing fan id.',
+        commandErrorMessage: 'Fan command failed: missing fan id.',
+        lastCommandMessage: null,
       );
       return;
     }
@@ -98,7 +99,8 @@ class MonitorController extends Notifier<MonitorState> {
     final fanId = fan.id;
     if (fanId == null || fanId.isEmpty) {
       state = state.copyWith(
-        errorMessage: 'Fan command failed: missing fan id.',
+        commandErrorMessage: 'Fan command failed: missing fan id.',
+        lastCommandMessage: null,
       );
       return;
     }
@@ -124,6 +126,7 @@ class MonitorController extends Notifier<MonitorState> {
   }) async {
     state = state.copyWith(
       activeFanCommandId: fanId,
+      commandErrorMessage: null,
       errorMessage: null,
       lastCommandMessage: null,
     );
@@ -132,13 +135,14 @@ class MonitorController extends Notifier<MonitorState> {
       await action();
       state = state.copyWith(
         activeFanCommandId: null,
+        commandErrorMessage: null,
         lastCommandMessage: successMessage,
       );
       await refresh(showSpinner: false);
     } catch (error) {
       state = state.copyWith(
         activeFanCommandId: null,
-        errorMessage: 'Fan command failed: $error',
+        commandErrorMessage: 'Fan command failed: $error',
       );
     }
   }

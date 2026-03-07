@@ -61,6 +61,17 @@ final monitorErrorMessageProvider = Provider<String?>((ref) {
   );
 });
 
+final monitorCommandErrorMessageProvider = Provider<String?>((ref) {
+  final debugFlags = ref.watch(debugFlagsProvider);
+  if (debugFlags.showError) {
+    return 'Debug override: native bridge reported an injected error state.';
+  }
+
+  return ref.watch(
+    monitorControllerProvider.select((state) => state.commandErrorMessage),
+  );
+});
+
 final monitorLastCommandMessageProvider = Provider<String?>((ref) {
   final debugFlags = ref.watch(debugFlagsProvider);
   if (debugFlags.showSuccess) {

@@ -117,6 +117,7 @@ class MonitorState {
     required this.isBootstrapping,
     required this.isRefreshing,
     this.activeFanCommandId,
+    this.commandErrorMessage,
     this.errorMessage,
     this.lastCommandMessage,
   });
@@ -143,6 +144,7 @@ class MonitorState {
   final bool isBootstrapping;
   final bool isRefreshing;
   final String? activeFanCommandId;
+  final String? commandErrorMessage;
   final String? errorMessage;
   final String? lastCommandMessage;
 
@@ -154,6 +156,7 @@ class MonitorState {
     bool? isBootstrapping,
     bool? isRefreshing,
     Object? activeFanCommandId = _sentinel,
+    Object? commandErrorMessage = _sentinel,
     Object? errorMessage = _sentinel,
     Object? lastCommandMessage = _sentinel,
   }) {
@@ -167,6 +170,9 @@ class MonitorState {
       activeFanCommandId: identical(activeFanCommandId, _sentinel)
           ? this.activeFanCommandId
           : activeFanCommandId as String?,
+      commandErrorMessage: identical(commandErrorMessage, _sentinel)
+          ? this.commandErrorMessage
+          : commandErrorMessage as String?,
       errorMessage: identical(errorMessage, _sentinel)
           ? this.errorMessage
           : errorMessage as String?,

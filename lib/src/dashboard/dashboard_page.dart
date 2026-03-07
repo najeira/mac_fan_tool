@@ -96,11 +96,14 @@ class _DashboardStatusBanners extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final commandErrorMessage = ref.watch(monitorCommandErrorMessageProvider);
     final errorMessage = ref.watch(monitorErrorMessageProvider);
     final lastCommandMessage = ref.watch(monitorLastCommandMessageProvider);
     final hardwareNote = ref.watch(hardwareNoteProvider);
 
     final children = [
+      if (commandErrorMessage != null)
+        NoticeBanner(tone: NoticeTone.error, message: commandErrorMessage),
       if (errorMessage != null)
         NoticeBanner(tone: NoticeTone.error, message: errorMessage),
       if (lastCommandMessage != null)
