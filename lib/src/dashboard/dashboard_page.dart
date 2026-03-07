@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:macos_ui/macos_ui.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/views/details_view.dart';
@@ -42,23 +43,45 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-class _DashboardLayout extends StatelessWidget {
+class _DashboardLayout extends ConsumerWidget {
   const _DashboardLayout();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final debugEnabled = ref.watch(dashboardDebugEnabledProvider);
+    final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1180;
         return ProviderScope(
-          overrides: [dashboardIsWideProvider.overrideWithValue(isWide)],
+          overrides: [
+            dashboardIsWideProvider.overrideWithValue(isWide),
+            if (debugOverrides.showBootstrapping)
+              monitorIsBootstrappingProvider.overrideWithValue(true),
+            if (debugOverrides.showRefreshing)
+              monitorIsRefreshingProvider.overrideWithValue(true),
+            if (debugOverrides.showError)
+              monitorErrorMessageProvider.overrideWithValue(
+                'Debug override: native bridge reported an injected error state.',
+              ),
+            if (debugOverrides.showSuccess)
+              monitorLastCommandMessageProvider.overrideWithValue(
+                'Debug override: fan command completed successfully.',
+              ),
+            if (debugOverrides.showHardwareNote)
+              dashboardHardwareNoteProvider.overrideWithValue(
+                'Debug override: showing a simulated hardware note for layout testing.',
+              ),
+          ],
           child: ListView(
             padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
-            children: const [
-              DashboardHeroPanel(),
-              _DashboardStatusBanners(),
-              SizedBox(height: 26),
-              _DashboardBody(),
+            children: [
+              if (debugEnabled) const DashboardDebugPanel(),
+              const DashboardHeroPanel(),
+              const _DashboardStatusBanners(),
+              const SizedBox(height: 26),
+              const _DashboardBody(),
             ],
           ),
         );
