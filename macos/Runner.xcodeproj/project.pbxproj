@@ -23,6 +23,7 @@
 /* Begin PBXBuildFile section */
 		0A7C990F2DCA1001004A1120 /* HardwareBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */; };
 		0A7C99102DCA1001004A1120 /* HardwareApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */; };
+		0A7C99122DDA1001004A1120 /* HardwareSensorBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
@@ -66,6 +67,7 @@
 /* Begin PBXFileReference section */
 		0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareBridge.swift; sourceTree = "<group>"; };
 		0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pigeon/HardwareApi.g.swift; sourceTree = "<group>"; };
+		0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HardwareSensorBridge.m; sourceTree = "<group>"; };
 		2276E2DB44FE4345D705E1AC /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -182,6 +184,7 @@
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */,
+				0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */,
 				0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
@@ -444,6 +447,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A7C99102DCA1001004A1120 /* HardwareApi.g.swift in Sources */,
+				0A7C99122DDA1001004A1120 /* HardwareSensorBridge.m in Sources */,
 				0A7C990F2DCA1001004A1120 /* HardwareBridge.swift in Sources */,
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
@@ -588,6 +592,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OBJC_BRIDGING_HEADER = Runner/Runner-Bridging-Header.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Profile;
@@ -721,6 +726,7 @@
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_OBJC_BRIDGING_HEADER = Runner/Runner-Bridging-Header.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -740,6 +746,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OBJC_BRIDGING_HEADER = Runner/Runner-Bridging-Header.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

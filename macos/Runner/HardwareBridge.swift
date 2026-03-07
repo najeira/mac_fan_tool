@@ -2,6 +2,7 @@ import Cocoa
 import Darwin
 import Foundation
 import IOKit
+import IOKit.hidsystem
 
 private typealias FourCharCode = UInt32
 
@@ -27,6 +28,7 @@ private enum SMCDataType: String {
 private enum SMCCommand: UInt8 {
   case kernelIndex = 2
   case readBytes = 5
+  case readIndex = 8
   case readKeyInfo = 9
 }
 
@@ -92,30 +94,101 @@ private struct SensorDescriptor {
   let kind: SensorKindData
 }
 
-private enum AppleSiliconGeneration {
+private enum AppleSiliconModel {
   case m1
+  case m1Pro
+  case m1Max
+  case m1Ultra
   case m2
+  case m2Pro
+  case m2Max
+  case m2Ultra
   case m3
+  case m3Pro
+  case m3Max
+  case m3Ultra
   case m4
+  case m4Pro
+  case m4Max
+  case m4Ultra
   case unknown
 
-  static func detect(from brand: String) -> AppleSiliconGeneration {
+  static func detect(from brand: String) -> AppleSiliconModel {
     let normalized = brand.uppercased()
 
+    if normalized.contains("M4 ULTRA") {
+      return .m4Ultra
+    }
+    if normalized.contains("M4 MAX") {
+      return .m4Max
+    }
+    if normalized.contains("M4 PRO") {
+      return .m4Pro
+    }
     if normalized.contains("M4") {
       return .m4
+    }
+    if normalized.contains("M3 ULTRA") {
+      return .m3Ultra
+    }
+    if normalized.contains("M3 MAX") {
+      return .m3Max
+    }
+    if normalized.contains("M3 PRO") {
+      return .m3Pro
     }
     if normalized.contains("M3") {
       return .m3
     }
+    if normalized.contains("M2 ULTRA") {
+      return .m2Ultra
+    }
+    if normalized.contains("M2 MAX") {
+      return .m2Max
+    }
+    if normalized.contains("M2 PRO") {
+      return .m2Pro
+    }
     if normalized.contains("M2") {
       return .m2
+    }
+    if normalized.contains("M1 ULTRA") {
+      return .m1Ultra
+    }
+    if normalized.contains("M1 MAX") {
+      return .m1Max
+    }
+    if normalized.contains("M1 PRO") {
+      return .m1Pro
     }
     if normalized.contains("M1") {
       return .m1
     }
     return .unknown
   }
+
+  var generation: AppleSiliconGeneration {
+    switch self {
+    case .m1, .m1Pro, .m1Max, .m1Ultra:
+      return .m1
+    case .m2, .m2Pro, .m2Max, .m2Ultra:
+      return .m2
+    case .m3, .m3Pro, .m3Max, .m3Ultra:
+      return .m3
+    case .m4, .m4Pro, .m4Max, .m4Ultra:
+      return .m4
+    case .unknown:
+      return .unknown
+    }
+  }
+}
+
+private enum AppleSiliconGeneration {
+  case m1
+  case m2
+  case m3
+  case m4
+  case unknown
 }
 
 private enum Sysctl {
@@ -401,13 +474,13 @@ private enum SMCConnectionError: Error {
 
 private final class AppleSiliconHardwareMonitor {
   private let chipBrand: String
-  private let chipGeneration: AppleSiliconGeneration
+  private let chipModel: AppleSiliconModel
   private let smc: AppleSMCConnection?
   private let startupNote: String?
 
   init() {
     chipBrand = Sysctl.string("machdep.cpu.brand_string") ?? "Apple Silicon"
-    chipGeneration = AppleSiliconGeneration.detect(from: chipBrand)
+    chipModel = AppleSiliconModel.detect(from: chipBrand)
 
     guard Sysctl.isAppleSilicon else {
       smc = nil
@@ -450,12 +523,15 @@ private final class AppleSiliconHardwareMonitor {
 
     let sensors = readSensors()
     let fans = readFans()
+    let backend = sensors.contains(where: { $0.id?.hasPrefix("hid-") == true })
+      ? "apple-smc-hid"
+      : "apple-smc"
 
     return HardwareCapabilitiesData(
       supportsRawSensors: !sensors.isEmpty,
       supportsFanControl: false,
       hasFans: !fans.isEmpty,
-      backend: "apple-smc",
+      backend: backend,
       note: sensors.isEmpty ? missingSensorNote() : nil
     )
   }
@@ -494,19 +570,38 @@ private final class AppleSiliconHardwareMonitor {
   }
 
   private func readSensors() -> [SensorReadingData] {
+    guard smc != nil else {
+      return []
+    }
+
+    var readings: [SensorReadingData] = []
+
+    if chipModel == .m4Pro {
+      readings.append(contentsOf: readM4ProCpuThermals())
+      readings.append(contentsOf: readKnownSmcSensors(Self.m4ProGpuSensors))
+      readings.append(contentsOf: readKnownSmcSensors(Self.m4ProSupplementalSensors))
+      readings.append(contentsOf: readKnownHidSensors(promotePmuTdieToCpu: false))
+    } else {
+      readings.append(contentsOf: readKnownSmcSensors(sensorCatalog))
+      readings.append(contentsOf: readKnownHidSensors(promotePmuTdieToCpu: false))
+    }
+
+    return deduplicated(readings)
+  }
+
+  private func readKnownSmcSensors(_ descriptors: [SensorDescriptor]) -> [SensorReadingData] {
     guard let smc else {
       return []
     }
 
-    var seenKeys = Set<String>()
     var readings: [SensorReadingData] = []
+    var seenKeys = Set<String>()
 
-    for descriptor in sensorCatalog {
+    for descriptor in descriptors {
       guard !seenKeys.contains(descriptor.key) else {
         continue
       }
-
-      guard let value = smc.value(for: descriptor.key), value > 0, value < 140 else {
+      guard let value = smc.value(for: descriptor.key), isReasonableTemperature(value) else {
         continue
       }
 
@@ -523,6 +618,181 @@ private final class AppleSiliconHardwareMonitor {
     }
 
     return readings
+  }
+
+  private func readM4ProCpuThermals() -> [SensorReadingData] {
+    let hidValues = hidTemperatureValues()
+    let cpuSensors = hidValues
+      .filter { $0.key.hasPrefix("PMU tdie") }
+      .compactMap { key, value -> SensorReadingData? in
+        guard isReasonableTemperature(value),
+              let index = trailingInteger(in: key) else {
+          return nil
+        }
+
+        return SensorReadingData(
+          id: "hid-\(key)",
+          name: "CPU thermal \(index)",
+          unit: "C",
+          value: value,
+          kind: .cpu
+        )
+      }
+      .sorted { ($0.id ?? "") < ($1.id ?? "") }
+
+    if !cpuSensors.isEmpty {
+      return cpuSensors
+    }
+
+    return readKnownSmcSensors(Self.m4CpuFallbackSensors)
+  }
+
+  private func readKnownHidSensors(promotePmuTdieToCpu: Bool) -> [SensorReadingData] {
+    let temperatures = hidTemperatureValues()
+
+    return temperatures.compactMap { key, value in
+      sensorFromHid(key: key, value: value, promotePmuTdieToCpu: promotePmuTdieToCpu)
+    }
+  }
+
+  private func hidTemperatureValues() -> [String: Double] {
+    guard let sensors = AppleSiliconTemperatureSensors(0xff00, 0x0005, kIOHIDEventTypeTemperature) else {
+      return [:]
+    }
+
+    return sensors.reduce(into: [String: Double]()) { partialResult, item in
+      partialResult[item.key] = item.value.doubleValue
+    }
+  }
+
+  private func sensorFromHid(
+    key: String,
+    value: Double,
+    promotePmuTdieToCpu: Bool
+  ) -> SensorReadingData? {
+    guard isReasonableTemperature(value) else {
+      return nil
+    }
+
+    if promotePmuTdieToCpu, key.hasPrefix("PMU tdie"), let index = trailingInteger(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "CPU thermal \(index)",
+        unit: "C",
+        value: value,
+        kind: .cpu
+      )
+    }
+
+    if key.hasPrefix("GPU MTR Temp Sensor"), let index = trailingInteger(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "GPU cluster \(index + 1)",
+        unit: "C",
+        value: value,
+        kind: .gpu
+      )
+    }
+
+    if key.hasPrefix("pACC MTR Temp Sensor"), let index = trailingInteger(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "CPU performance thermal \(index + 1)",
+        unit: "C",
+        value: value,
+        kind: .cpu
+      )
+    }
+
+    if key.hasPrefix("eACC MTR Temp Sensor"), let index = trailingInteger(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "CPU efficiency thermal \(index + 1)",
+        unit: "C",
+        value: value,
+        kind: .cpu
+      )
+    }
+
+    if key.hasPrefix("PMGR SOC Die Temp Sensor"), let index = trailingInteger(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "Power manager die \(index + 1)",
+        unit: "C",
+        value: value,
+        kind: .other
+      )
+    }
+
+    if key.hasPrefix("PMU tdev"), let index = trailingInteger(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "Power manager dev \(index)",
+        unit: "C",
+        value: value,
+        kind: .other
+      )
+    }
+
+    if key.hasPrefix("PMU tdie"), let index = trailingInteger(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "Power manager die \(index)",
+        unit: "C",
+        value: value,
+        kind: .other
+      )
+    }
+
+    if key.hasPrefix("NAND CH"), let channel = channelNumber(in: key) {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "SSD / NAND channel \(channel + 1)",
+        unit: "C",
+        value: value,
+        kind: .other
+      )
+    }
+
+    if key == "gas gauge battery" {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "Battery",
+        unit: "C",
+        value: value,
+        kind: .other
+      )
+    }
+
+    if key == "PMU tcal" {
+      return SensorReadingData(
+        id: "hid-\(key)",
+        name: "Power manager calibration",
+        unit: "C",
+        value: value,
+        kind: .other
+      )
+    }
+
+    return nil
+  }
+
+  private func deduplicated(_ readings: [SensorReadingData]) -> [SensorReadingData] {
+    var seen = Set<String>()
+    var result: [SensorReadingData] = []
+
+    for reading in readings {
+      guard let id = reading.id, !seen.contains(id) else {
+        continue
+      }
+      seen.insert(id)
+      result.append(reading)
+    }
+
+    return result.sorted {
+      ($0.kind?.rawValue ?? 99, $0.name ?? "", $0.id ?? "") <
+      ($1.kind?.rawValue ?? 99, $1.name ?? "", $1.id ?? "")
+    }
   }
 
   private func readFans() -> [FanReadingData] {
@@ -573,8 +843,30 @@ private final class AppleSiliconHardwareMonitor {
     return fans
   }
 
+  private func isReasonableTemperature(_ value: Double) -> Bool {
+    value.isFinite && value > 0 && value < 140
+  }
+
+  private func trailingInteger(in text: String) -> Int? {
+    let suffix = text.reversed().prefix { $0.isNumber }.reversed()
+    guard !suffix.isEmpty else {
+      return nil
+    }
+    return Int(String(suffix))
+  }
+
+  private func channelNumber(in text: String) -> Int? {
+    guard let chRange = text.range(of: "CH"),
+          let tempRange = text.range(of: " temp") else {
+      return nil
+    }
+
+    let value = text[chRange.upperBound..<tempRange.lowerBound]
+    return Int(value)
+  }
+
   private func missingSensorNote() -> String? {
-    switch chipGeneration {
+    switch chipModel.generation {
     case .unknown:
       return "AppleSMC opened successfully, but this chip generation (\(chipBrand)) is not mapped yet."
     case .m1, .m2, .m3, .m4:
@@ -583,7 +875,7 @@ private final class AppleSiliconHardwareMonitor {
   }
 
   private var sensorCatalog: [SensorDescriptor] {
-    switch chipGeneration {
+    switch chipModel.generation {
     case .m1:
       return Self.m1Sensors + Self.appleSiliconCommonSensors
     case .m2:
@@ -591,7 +883,7 @@ private final class AppleSiliconHardwareMonitor {
     case .m3:
       return Self.m3Sensors + Self.appleSiliconCommonSensors
     case .m4:
-      return Self.m4Sensors + Self.appleSiliconCommonSensors
+      return Self.m4Sensors + Self.appleSiliconCommonSensors + Self.m4SupplementalSensors
     case .unknown:
       return Self.appleSiliconCommonSensors
     }
@@ -696,6 +988,68 @@ private final class AppleSiliconHardwareMonitor {
     SensorDescriptor(key: "Tm0p", name: "Memory proximity 1", kind: .memory),
     SensorDescriptor(key: "Tm1p", name: "Memory proximity 2", kind: .memory),
     SensorDescriptor(key: "Tm2p", name: "Memory proximity 3", kind: .memory),
+  ]
+
+  private static let m4SupplementalSensors: [SensorDescriptor] = [
+    SensorDescriptor(key: "TH0x", name: "SSD / NAND", kind: .other),
+    SensorDescriptor(key: "TPMP", name: "Power manager", kind: .other),
+    SensorDescriptor(key: "TPSD", name: "Power supply die", kind: .other),
+    SensorDescriptor(key: "TPSP", name: "Power supply", kind: .other),
+  ]
+
+  private static let m4CpuFallbackSensors: [SensorDescriptor] = [
+    SensorDescriptor(key: "Tp01", name: "CPU thermal 1", kind: .cpu),
+    SensorDescriptor(key: "Tp05", name: "CPU thermal 2", kind: .cpu),
+    SensorDescriptor(key: "Tp09", name: "CPU thermal 3", kind: .cpu),
+    SensorDescriptor(key: "Tp0D", name: "CPU thermal 4", kind: .cpu),
+    SensorDescriptor(key: "Tp0H", name: "CPU thermal 5", kind: .cpu),
+    SensorDescriptor(key: "Tp0L", name: "CPU thermal 6", kind: .cpu),
+    SensorDescriptor(key: "Tp0P", name: "CPU thermal 7", kind: .cpu),
+    SensorDescriptor(key: "Tp0T", name: "CPU thermal 8", kind: .cpu),
+    SensorDescriptor(key: "Tp0X", name: "CPU thermal 9", kind: .cpu),
+    SensorDescriptor(key: "Tp0b", name: "CPU thermal 10", kind: .cpu),
+    SensorDescriptor(key: "Tp0e", name: "CPU thermal 11", kind: .cpu),
+    SensorDescriptor(key: "Tp0i", name: "CPU thermal 12", kind: .cpu),
+    SensorDescriptor(key: "Tp0m", name: "CPU thermal 13", kind: .cpu),
+    SensorDescriptor(key: "Tp0q", name: "CPU thermal 14", kind: .cpu),
+  ]
+
+  private static let m4ProSupplementalSensors: [SensorDescriptor] = [
+    SensorDescriptor(key: "Tm0p", name: "Memory proximity 1", kind: .memory),
+    SensorDescriptor(key: "Tm1p", name: "Memory proximity 2", kind: .memory),
+    SensorDescriptor(key: "Tm2p", name: "Memory proximity 3", kind: .memory),
+    SensorDescriptor(key: "TH0x", name: "SSD / NAND", kind: .other),
+    SensorDescriptor(key: "TH0a", name: "SSD / NAND A", kind: .other),
+    SensorDescriptor(key: "TH0b", name: "SSD / NAND B", kind: .other),
+    SensorDescriptor(key: "TH0p", name: "SSD controller", kind: .other),
+    SensorDescriptor(key: "TPMP", name: "Power manager", kind: .other),
+    SensorDescriptor(key: "TPCP", name: "CPU package", kind: .cpu),
+    SensorDescriptor(key: "TPSD", name: "Power supply die", kind: .other),
+    SensorDescriptor(key: "TPSP", name: "Power supply", kind: .other),
+    SensorDescriptor(key: "TW0P", name: "Airport", kind: .other),
+  ]
+
+  private static let m4ProGpuSensors: [SensorDescriptor] = [
+    SensorDescriptor(key: "Tg04", name: "GPU thermal 1", kind: .gpu),
+    SensorDescriptor(key: "Tg05", name: "GPU thermal 2", kind: .gpu),
+    SensorDescriptor(key: "Tg0K", name: "GPU thermal 3", kind: .gpu),
+    SensorDescriptor(key: "Tg0L", name: "GPU thermal 4", kind: .gpu),
+    SensorDescriptor(key: "Tg0R", name: "GPU thermal 5", kind: .gpu),
+    SensorDescriptor(key: "Tg0S", name: "GPU thermal 6", kind: .gpu),
+    SensorDescriptor(key: "Tg0X", name: "GPU thermal 7", kind: .gpu),
+    SensorDescriptor(key: "Tg0Y", name: "GPU thermal 8", kind: .gpu),
+    SensorDescriptor(key: "Tg0d", name: "GPU thermal 9", kind: .gpu),
+    SensorDescriptor(key: "Tg0e", name: "GPU thermal 10", kind: .gpu),
+    SensorDescriptor(key: "Tg0j", name: "GPU thermal 11", kind: .gpu),
+    SensorDescriptor(key: "Tg0k", name: "GPU thermal 12", kind: .gpu),
+    SensorDescriptor(key: "Tg0y", name: "GPU thermal 13", kind: .gpu),
+    SensorDescriptor(key: "Tg0z", name: "GPU thermal 14", kind: .gpu),
+    SensorDescriptor(key: "Tg1E", name: "GPU thermal 15", kind: .gpu),
+    SensorDescriptor(key: "Tg1F", name: "GPU thermal 16", kind: .gpu),
+    SensorDescriptor(key: "Tg1U", name: "GPU thermal 17", kind: .gpu),
+    SensorDescriptor(key: "Tg1V", name: "GPU thermal 18", kind: .gpu),
+    SensorDescriptor(key: "Tg1k", name: "GPU thermal 19", kind: .gpu),
+    SensorDescriptor(key: "Tg1l", name: "GPU thermal 20", kind: .gpu),
   ]
 }
 
