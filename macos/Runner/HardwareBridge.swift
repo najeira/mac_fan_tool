@@ -28,6 +28,7 @@ private enum SMCDataType: String {
 private enum SMCCommand: UInt8 {
   case kernelIndex = 2
   case readBytes = 5
+  case writeBytes = 6
   case readKeyInfo = 9
 }
 
@@ -334,6 +335,93 @@ private final class AppleSMCConnection {
     return decode(value: value)
   }
 
+  func integerValue(for key: String, allowZero: Bool = false) -> UInt32? {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard let value = readValue(for: key) else {
+      return nil
+    }
+
+    if !allowZero && isZero(value) {
+      return nil
+    }
+
+    return try? decodeInteger(value: value)
+  }
+
+  func canWriteNumeric(for key: String) -> Bool {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard let value = readValue(for: key) else {
+      return false
+    }
+
+    return supportsNumericEncoding(value: value)
+  }
+
+  func canWriteInteger(for key: String) -> Bool {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard let value = readValue(for: key) else {
+      return false
+    }
+
+    return supportsIntegerEncoding(value: value)
+  }
+
+  func writeNumeric(_ numericValue: Double, for key: String) throws {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard let value = readValue(for: key) else {
+      throw SMCWriteError.keyNotFound(key: key)
+    }
+
+    let bytes = try encodeNumeric(numericValue, using: value)
+    try writeLocked(bytes, using: value)
+  }
+
+  func writeInteger(_ integerValue: UInt32, for key: String) throws {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard let value = readValue(for: key) else {
+      throw SMCWriteError.keyNotFound(key: key)
+    }
+
+    let bytes = try encodeInteger(integerValue, using: value)
+    try writeLocked(bytes, using: value)
+  }
+
+  func updateInteger(for key: String, transform: (UInt32) -> UInt32) throws {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    guard let value = readValue(for: key) else {
+      throw SMCWriteError.keyNotFound(key: key)
+    }
+
+    let current = try decodeInteger(value: value)
+    let next = transform(current)
+    let bytes = try encodeInteger(next, using: value)
+    try writeLocked(bytes, using: value)
+  }
+
   private func readValue(for key: String) -> SMCValue? {
     var value = SMCValue(key: key)
     let result = read(&value)
@@ -398,6 +486,294 @@ private final class AppleSMCConnection {
       &output,
       &outputSize
     )
+  }
+
+  private func isZero(_ value: SMCValue) -> Bool {
+    value.bytes.prefix(Int(value.dataSize)).allSatisfy { $0 == 0 }
+  }
+
+  private func writeLocked(_ bytes: [UInt8], using value: SMCValue) throws {
+    let dataSize = Int(value.dataSize)
+    guard dataSize > 0, dataSize <= 32 else {
+      throw SMCWriteError.invalidDataSize(
+        key: value.key,
+        expected: dataSize,
+        actual: bytes.count
+      )
+    }
+
+    guard bytes.count == dataSize else {
+      throw SMCWriteError.invalidDataSize(
+        key: value.key,
+        expected: dataSize,
+        actual: bytes.count
+      )
+    }
+
+    var input = SMCKeyData()
+    var output = SMCKeyData()
+    var paddedBytes = [UInt8](repeating: 0, count: 32)
+
+    input.key = FourCharCode(from: value.key)
+    input.data8 = SMCCommand.writeBytes.rawValue
+    input.keyInfo.dataSize = IOByteCount32(value.dataSize)
+    if value.dataType.count == 4 {
+      input.keyInfo.dataType = FourCharCode(from: value.dataType)
+    }
+
+    paddedBytes.replaceSubrange(0..<bytes.count, with: bytes)
+    withUnsafeMutableBytes(of: &input.bytes) { rawBuffer in
+      rawBuffer.copyBytes(from: paddedBytes)
+    }
+
+    let result = call(
+      index: SMCCommand.kernelIndex.rawValue,
+      input: &input,
+      output: &output
+    )
+    guard result == kIOReturnSuccess else {
+      throw SMCWriteError.writeFailed(key: value.key, result: result)
+    }
+  }
+
+  private func decodeInteger(value: SMCValue) throws -> UInt32 {
+    switch value.dataType {
+    case SMCDataType.ui8.rawValue:
+      guard value.dataSize == 1 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 1,
+          actual: Int(value.dataSize)
+        )
+      }
+      return UInt32(value.bytes[0])
+
+    case SMCDataType.ui16.rawValue:
+      guard value.dataSize == 2 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 2,
+          actual: Int(value.dataSize)
+        )
+      }
+      return UInt32(UInt16(bytes: (value.bytes[0], value.bytes[1])))
+
+    case SMCDataType.ui32.rawValue:
+      guard value.dataSize == 4 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 4,
+          actual: Int(value.dataSize)
+        )
+      }
+      return UInt32(bytes: (value.bytes[0], value.bytes[1], value.bytes[2], value.bytes[3]))
+
+    default:
+      throw SMCWriteError.unsupportedDataType(
+        key: value.key,
+        dataType: value.dataType
+      )
+    }
+  }
+
+  private func encodeNumeric(_ numericValue: Double, using value: SMCValue) throws -> [UInt8] {
+    switch value.dataType {
+    case SMCDataType.ui8.rawValue:
+      return try encodeInteger(
+        checkedInteger(
+          for: value,
+          numericValue: numericValue,
+          max: Double(UInt8.max)
+        ),
+        using: value
+      )
+
+    case SMCDataType.ui16.rawValue:
+      return try encodeInteger(
+        checkedInteger(
+          for: value,
+          numericValue: numericValue,
+          max: Double(UInt16.max)
+        ),
+        using: value
+      )
+
+    case SMCDataType.ui32.rawValue:
+      return try encodeInteger(
+        checkedInteger(
+          for: value,
+          numericValue: numericValue,
+          max: Double(UInt32.max)
+        ),
+        using: value
+      )
+
+    case SMCDataType.flt.rawValue:
+      guard value.dataSize == 4 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 4,
+          actual: Int(value.dataSize)
+        )
+      }
+
+      var floatValue = Float(numericValue)
+      guard floatValue.isFinite else {
+        throw SMCWriteError.valueOutOfRange(
+          key: value.key,
+          dataType: value.dataType,
+          value: numericValue
+        )
+      }
+
+      return withUnsafeBytes(of: &floatValue) { rawBuffer in
+        Array(rawBuffer)
+      }
+
+    case SMCDataType.fpe2.rawValue:
+      guard value.dataSize == 2 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 2,
+          actual: Int(value.dataSize)
+        )
+      }
+
+      let integerValue = try checkedInteger(
+        for: value,
+        numericValue: numericValue,
+        max: Double(UInt16.max >> 2)
+      )
+      let encoded = UInt16(integerValue) << 2
+      return [
+        UInt8((encoded >> 8) & 0xff),
+        UInt8(encoded & 0xff),
+      ]
+
+    default:
+      throw SMCWriteError.unsupportedDataType(
+        key: value.key,
+        dataType: value.dataType
+      )
+    }
+  }
+
+  private func encodeInteger(_ integerValue: UInt32, using value: SMCValue) throws -> [UInt8] {
+    switch value.dataType {
+    case SMCDataType.ui8.rawValue:
+      guard value.dataSize == 1 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 1,
+          actual: Int(value.dataSize)
+        )
+      }
+      guard integerValue <= UInt32(UInt8.max) else {
+        throw SMCWriteError.valueOutOfRange(
+          key: value.key,
+          dataType: value.dataType,
+          value: Double(integerValue)
+        )
+      }
+      return [UInt8(integerValue)]
+
+    case SMCDataType.ui16.rawValue:
+      guard value.dataSize == 2 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 2,
+          actual: Int(value.dataSize)
+        )
+      }
+      guard integerValue <= UInt32(UInt16.max) else {
+        throw SMCWriteError.valueOutOfRange(
+          key: value.key,
+          dataType: value.dataType,
+          value: Double(integerValue)
+        )
+      }
+      let encoded = UInt16(integerValue)
+      return [
+        UInt8((encoded >> 8) & 0xff),
+        UInt8(encoded & 0xff),
+      ]
+
+    case SMCDataType.ui32.rawValue:
+      guard value.dataSize == 4 else {
+        throw SMCWriteError.invalidDataSize(
+          key: value.key,
+          expected: 4,
+          actual: Int(value.dataSize)
+        )
+      }
+      return [
+        UInt8((integerValue >> 24) & 0xff),
+        UInt8((integerValue >> 16) & 0xff),
+        UInt8((integerValue >> 8) & 0xff),
+        UInt8(integerValue & 0xff),
+      ]
+
+    default:
+      throw SMCWriteError.unsupportedDataType(
+        key: value.key,
+        dataType: value.dataType
+      )
+    }
+  }
+
+  private func checkedInteger(
+    for value: SMCValue,
+    numericValue: Double,
+    max: Double
+  ) throws -> UInt32 {
+    guard numericValue.isFinite else {
+      throw SMCWriteError.valueOutOfRange(
+        key: value.key,
+        dataType: value.dataType,
+        value: numericValue
+      )
+    }
+
+    let roundedValue = numericValue.rounded()
+    guard roundedValue >= 0, roundedValue <= max else {
+      throw SMCWriteError.valueOutOfRange(
+        key: value.key,
+        dataType: value.dataType,
+        value: numericValue
+      )
+    }
+
+    return UInt32(roundedValue)
+  }
+
+  private func supportsNumericEncoding(value: SMCValue) -> Bool {
+    switch value.dataType {
+    case SMCDataType.ui8.rawValue:
+      return value.dataSize == 1
+    case SMCDataType.ui16.rawValue:
+      return value.dataSize == 2
+    case SMCDataType.ui32.rawValue:
+      return value.dataSize == 4
+    case SMCDataType.flt.rawValue:
+      return value.dataSize == 4
+    case SMCDataType.fpe2.rawValue:
+      return value.dataSize == 2
+    default:
+      return false
+    }
+  }
+
+  private func supportsIntegerEncoding(value: SMCValue) -> Bool {
+    switch value.dataType {
+    case SMCDataType.ui8.rawValue:
+      return value.dataSize == 1
+    case SMCDataType.ui16.rawValue:
+      return value.dataSize == 2
+    case SMCDataType.ui32.rawValue:
+      return value.dataSize == 4
+    default:
+      return false
+    }
   }
 
   private func decode(value: SMCValue) -> Double? {
@@ -471,6 +847,65 @@ private enum SMCConnectionError: Error {
   }
 }
 
+private enum SMCWriteError: Error {
+  case keyNotFound(key: String)
+  case invalidDataSize(key: String, expected: Int, actual: Int)
+  case unsupportedDataType(key: String, dataType: String)
+  case valueOutOfRange(key: String, dataType: String, value: Double)
+  case writeFailed(key: String, result: kern_return_t)
+
+  var message: String {
+    switch self {
+    case let .keyNotFound(key):
+      return "AppleSMC key \(key) is not available on this Mac."
+    case let .invalidDataSize(key, expected, actual):
+      return "AppleSMC key \(key) expected \(expected) bytes, but got \(actual)."
+    case let .unsupportedDataType(key, dataType):
+      return "AppleSMC key \(key) uses unsupported type \(dataType)."
+    case let .valueOutOfRange(key, dataType, value):
+      return "Value \(value) is out of range for AppleSMC key \(key) (\(dataType))."
+    case let .writeFailed(key, result):
+      let description = String(cString: mach_error_string(result), encoding: .ascii) ?? "unknown error"
+      return "AppleSMC write to \(key) failed: \(description)."
+    }
+  }
+}
+
+private enum FanControlError: Error {
+  case unsupportedPlatform
+  case smcUnavailable(note: String?)
+  case invalidFanId(String)
+  case noFansAvailable
+  case fanNotFound(String)
+  case missingTelemetry(String)
+  case modeControlUnavailable(String)
+  case targetControlUnavailable(String)
+  case commandFailed(String)
+
+  var message: String {
+    switch self {
+    case .unsupportedPlatform:
+      return "Fan control is available only on Apple Silicon in this build."
+    case let .smcUnavailable(note):
+      return note ?? "AppleSMC is not available on this Mac."
+    case let .invalidFanId(fanId):
+      return "Unsupported fan identifier: \(fanId)."
+    case .noFansAvailable:
+      return "No controllable fans were reported by AppleSMC."
+    case let .fanNotFound(fanId):
+      return "Fan \(fanId) is not available on this Mac."
+    case let .missingTelemetry(fanId):
+      return "Fan telemetry is incomplete for \(fanId)."
+    case let .modeControlUnavailable(fanId):
+      return "Manual fan mode is not exposed for \(fanId) on this Mac."
+    case let .targetControlUnavailable(fanId):
+      return "Target RPM writes are not exposed for \(fanId) on this Mac."
+    case let .commandFailed(message):
+      return message
+    }
+  }
+}
+
 private final class AppleSiliconHardwareMonitor {
   private enum CpuThermalStrategy {
     case smcOnly
@@ -526,6 +961,7 @@ private final class AppleSiliconHardwareMonitor {
     }
 
     let sensors = readSensors()
+    let fanCount = readFanCount()
     let fans = readFans()
     let backend = sensors.contains(where: { $0.id?.hasPrefix("hid-") == true })
       ? "apple-smc-hid"
@@ -533,7 +969,7 @@ private final class AppleSiliconHardwareMonitor {
 
     return HardwareCapabilitiesData(
       supportsRawSensors: !sensors.isEmpty,
-      supportsFanControl: false,
+      supportsFanControl: !fans.isEmpty && supportsFanControl(fanCount: fanCount),
       hasFans: !fans.isEmpty,
       backend: backend,
       note: sensors.isEmpty ? missingSensorNote() : nil
@@ -571,6 +1007,87 @@ private final class AppleSiliconHardwareMonitor {
       fans: fans,
       note: sensors.isEmpty ? missingSensorNote() : nil
     )
+  }
+
+  func setFanMode(fanId: String, mode: FanModeData) throws {
+    guard Sysctl.isAppleSilicon else {
+      throw FanControlError.unsupportedPlatform
+    }
+
+    guard let smc else {
+      throw FanControlError.smcUnavailable(note: startupNote)
+    }
+
+    let index = try resolvedFanIndex(for: fanId)
+    let modeValue: UInt32 = mode == .manual ? 1 : 0
+    let maskBit = UInt32(1) << UInt32(index)
+
+    var didWrite = false
+    var lastFailureMessage: String?
+
+    let modeKey = "F\(index)Md"
+    if smc.canWriteInteger(for: modeKey) {
+      do {
+        try smc.writeInteger(modeValue, for: modeKey)
+        didWrite = true
+      } catch let error as SMCWriteError {
+        lastFailureMessage = error.message
+      } catch {
+        lastFailureMessage = String(describing: error)
+      }
+    }
+
+    let forceKey = "FS! "
+    if smc.canWriteInteger(for: forceKey) {
+      do {
+        try smc.updateInteger(for: forceKey) { currentValue in
+          mode == .manual ? (currentValue | maskBit) : (currentValue & ~maskBit)
+        }
+        didWrite = true
+      } catch let error as SMCWriteError {
+        if lastFailureMessage == nil {
+          lastFailureMessage = error.message
+        }
+      } catch {
+        if lastFailureMessage == nil {
+          lastFailureMessage = String(describing: error)
+        }
+      }
+    }
+
+    guard didWrite else {
+      if let lastFailureMessage {
+        throw FanControlError.commandFailed(lastFailureMessage)
+      }
+      throw FanControlError.modeControlUnavailable(fanId)
+    }
+  }
+
+  func setFanTargetRpm(fanId: String, targetRpm: Int64) throws {
+    guard Sysctl.isAppleSilicon else {
+      throw FanControlError.unsupportedPlatform
+    }
+
+    guard let smc else {
+      throw FanControlError.smcUnavailable(note: startupNote)
+    }
+
+    let index = try resolvedFanIndex(for: fanId)
+    let bounds = try fanBounds(for: index, fanId: fanId)
+    let clampedTarget = max(bounds.minimumRpm, min(Int(targetRpm), bounds.maximumRpm))
+    let targetKey = "F\(index)Tg"
+
+    guard smc.canWriteNumeric(for: targetKey) else {
+      throw FanControlError.targetControlUnavailable(fanId)
+    }
+
+    do {
+      try smc.writeNumeric(Double(clampedTarget), for: targetKey)
+    } catch let error as SMCWriteError {
+      throw FanControlError.commandFailed(error.message)
+    } catch {
+      throw FanControlError.commandFailed(String(describing: error))
+    }
   }
 
   private func readSensors() -> [SensorReadingData] {
@@ -788,23 +1305,20 @@ private final class AppleSiliconHardwareMonitor {
       return []
     }
 
-    guard let rawFanCount = smc.value(for: "FNum", allowZero: true) else {
-      return []
-    }
-
-    let fanCount = max(0, Int(rawFanCount.rounded(.towardZero)))
+    let fanCount = readFanCount()
     guard fanCount > 0 else {
       return []
     }
 
     var fans: [FanReadingData] = []
+    let forcedFanMask = smc.integerValue(for: "FS! ", allowZero: true)
 
     for index in 0..<fanCount {
       let current = smc.value(for: "F\(index)Ac")
       let minimum = smc.value(for: "F\(index)Mn")
       let maximum = smc.value(for: "F\(index)Mx")
       let target = smc.value(for: "F\(index)Tg", allowZero: true)
-      let modeValue = smc.value(for: "F\(index)Md", allowZero: true) ?? 0
+      let modeValue = smc.value(for: "F\(index)Md", allowZero: true)
 
       guard let current else {
         continue
@@ -814,6 +1328,9 @@ private final class AppleSiliconHardwareMonitor {
       let maximumRpm = Int((maximum ?? current).rounded())
       let currentRpm = Int(current.rounded())
       let targetRpm = target.map { Int($0.rounded()) }
+      let manualOverrideEnabled =
+        forcedFanMask.map { ($0 & (UInt32(1) << UInt32(index))) != 0 } ?? false
+      let isManual = modeValue.map { $0 > 0 } ?? manualOverrideEnabled
 
       fans.append(
         FanReadingData(
@@ -823,12 +1340,85 @@ private final class AppleSiliconHardwareMonitor {
           minimumRpm: Int64(minimumRpm),
           maximumRpm: Int64(maximumRpm),
           targetRpm: targetRpm.map(Int64.init),
-          mode: modeValue > 0 ? .manual : .automatic
+          mode: isManual ? .manual : .automatic
         )
       )
     }
 
     return fans
+  }
+
+  private func readFanCount() -> Int {
+    guard let smc,
+          let rawFanCount = smc.value(for: "FNum", allowZero: true) else {
+      return 0
+    }
+
+    return max(0, Int(rawFanCount.rounded(.towardZero)))
+  }
+
+  private func supportsFanControl(fanCount: Int) -> Bool {
+    guard let smc, fanCount > 0 else {
+      return false
+    }
+
+    for index in 0..<fanCount {
+      guard smc.canWriteNumeric(for: "F\(index)Tg") else {
+        return false
+      }
+
+      let canWriteMode =
+        smc.canWriteInteger(for: "F\(index)Md") ||
+        smc.canWriteInteger(for: "FS! ")
+      guard canWriteMode else {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  private func resolvedFanIndex(for fanId: String) throws -> Int {
+    guard let index = fanIndex(from: fanId) else {
+      throw FanControlError.invalidFanId(fanId)
+    }
+
+    let fanCount = readFanCount()
+    guard fanCount > 0 else {
+      throw FanControlError.noFansAvailable
+    }
+
+    guard index >= 0, index < fanCount else {
+      throw FanControlError.fanNotFound(fanId)
+    }
+
+    return index
+  }
+
+  private func fanIndex(from fanId: String) -> Int? {
+    if fanId.hasPrefix("fan-") {
+      return Int(fanId.dropFirst(4))
+    }
+
+    return trailingInteger(in: fanId)
+  }
+
+  private func fanBounds(for index: Int, fanId: String) throws -> (minimumRpm: Int, maximumRpm: Int) {
+    guard let smc else {
+      throw FanControlError.smcUnavailable(note: startupNote)
+    }
+
+    guard let current = smc.value(for: "F\(index)Ac") else {
+      throw FanControlError.missingTelemetry(fanId)
+    }
+
+    let minimum = Int((smc.value(for: "F\(index)Mn") ?? current).rounded())
+    let maximum = Int((smc.value(for: "F\(index)Mx") ?? current).rounded())
+
+    return (
+      minimumRpm: min(minimum, maximum),
+      maximumRpm: max(minimum, maximum)
+    )
   }
 
   private func isReasonableTemperature(_ value: Double) -> Bool {
@@ -1100,19 +1690,39 @@ final class HardwareBridge: HardwareHostApi {
   }
 
   func setFanMode(fanId: String, mode: FanModeData) throws {
-    throw PigeonError(
-      code: "unimplemented",
-      message: "Fan writes are disabled. AppleSMC fan telemetry is wired, but manual control has not been enabled yet.",
-      details: "\(fanId):\(mode)"
-    )
+    do {
+      try monitor.setFanMode(fanId: fanId, mode: mode)
+    } catch let error as FanControlError {
+      throw PigeonError(
+        code: "fan-control",
+        message: error.message,
+        details: "\(fanId):\(mode)"
+      )
+    } catch {
+      throw PigeonError(
+        code: "fan-control",
+        message: "Fan mode update failed: \(error)",
+        details: "\(fanId):\(mode)"
+      )
+    }
   }
 
   func setFanTargetRpm(fanId: String, targetRpm: Int64) throws {
-    throw PigeonError(
-      code: "unimplemented",
-      message: "Fan writes are disabled. AppleSMC fan telemetry is wired, but manual control has not been enabled yet.",
-      details: "\(fanId):\(targetRpm)"
-    )
+    do {
+      try monitor.setFanTargetRpm(fanId: fanId, targetRpm: targetRpm)
+    } catch let error as FanControlError {
+      throw PigeonError(
+        code: "fan-control",
+        message: error.message,
+        details: "\(fanId):\(targetRpm)"
+      )
+    } catch {
+      throw PigeonError(
+        code: "fan-control",
+        message: "Fan target update failed: \(error)",
+        details: "\(fanId):\(targetRpm)"
+      )
+    }
   }
 
   private func mapThermalState(_ state: ProcessInfo.ThermalState) -> ThermalStateData {
