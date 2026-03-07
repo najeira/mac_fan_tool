@@ -292,16 +292,19 @@ final class FanControlHelperClient {
   }
 
   private func resolvedFanIndex(from fanId: String) throws -> Int {
-    if fanId.hasPrefix("fan-"), let index = Int(fanId.dropFirst(4)) {
-      return index
+    let prefix = "fan-"
+    guard fanId.hasPrefix(prefix) else {
+      throw FanControlHelperClientError.invalidFanId(fanId)
     }
 
-    let digits = fanId.reversed().prefix { $0.isNumber }.reversed()
-    if let index = Int(String(digits)) {
-      return index
+    let suffix = fanId.dropFirst(prefix.count)
+    guard !suffix.isEmpty,
+          suffix.unicodeScalars.allSatisfy({ CharacterSet.decimalDigits.contains($0) }),
+          let index = Int(String(suffix)) else {
+      throw FanControlHelperClientError.invalidFanId(fanId)
     }
 
-    throw FanControlHelperClientError.invalidFanId(fanId)
+    return index
   }
 
   private func registrationFailureMessage(for error: NSError) -> String {

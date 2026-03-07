@@ -693,11 +693,6 @@ private final class AppleSMCConnection {
   }
 }
 
-enum AppleSMCFanMode: Int {
-  case automatic = 0
-  case manual = 1
-}
-
 enum AppleSMCFanControlError: Error {
   case unsupportedPlatform
   case smcUnavailable(String)
@@ -774,7 +769,7 @@ private struct FanTargetSnapshot {
   let value: Int
 }
 
-final class AppleSMCFanController {
+final class AppleSMCFanController: FanControlControlling {
   private let smc: AppleSMCConnection
 
   init() throws {

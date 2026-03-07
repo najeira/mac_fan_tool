@@ -137,6 +137,54 @@ final class RunnerTests: XCTestCase {
     XCTAssertEqual(received?.targetRpm, 2450)
   }
 
+  func testSetFanModeRejectsNonCanonicalFanIds() {
+    let client = FanControlHelperClient()
+
+    for fanId in ["cpu-fan-1", "fan-1-extra", "fan-", "Fan-1"] {
+      XCTAssertThrowsError(try client.setFanMode(fanId: fanId, mode: .manual)) { error in
+        XCTAssertEqual(error as? FanControlHelperClientError, .invalidFanId(fanId))
+      }
+    }
+  }
+
+  func testManualFanLeaseControllerExpiresArmedLease() {
+    let leaseExpired = expectation(description: "manual lease expired")
+
+    let leaseController = ManualFanLeaseController(
+      duration: DispatchTimeInterval.milliseconds(50),
+      queue: DispatchQueue(label: "RunnerTests.manualLease.expiry")
+    ) { fanIndex in
+      XCTAssertEqual(fanIndex, 0)
+      leaseExpired.fulfill()
+    }
+
+    leaseController.arm(for: 0)
+
+    wait(for: [leaseExpired], timeout: 1.0)
+  }
+
+  func testManualFanLeaseControllerCancelPreventsExpiry() {
+    let unexpectedExpiry = expectation(description: "lease should not expire")
+    unexpectedExpiry.isInverted = true
+    let leaseWindowElapsed = expectation(description: "lease window elapsed")
+
+    let leaseController = ManualFanLeaseController(
+      duration: DispatchTimeInterval.milliseconds(50),
+      queue: DispatchQueue(label: "RunnerTests.manualLease.cancel")
+    ) { _ in
+      unexpectedExpiry.fulfill()
+    }
+
+    leaseController.arm(for: 0)
+    leaseController.cancel(for: 0)
+
+    DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(150)) {
+      leaseWindowElapsed.fulfill()
+    }
+
+    wait(for: [unexpectedExpiry, leaseWindowElapsed], timeout: 1.0)
+  }
+
   func testHardwareSensorBridgeSupportReturnsEmptyForMissingClient() {
     XCTAssertTrue(HardwareSensorBridgeSupport.temperatureValuesForSystemClient(nil).isEmpty)
   }

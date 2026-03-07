@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 
 struct FanControlHelperConfiguration {
@@ -58,6 +59,69 @@ enum FanControlWriteResultValidator {
       }
     }
   }
+}
+
+enum AppleSMCFanMode: Int {
+  case automatic = 0
+  case manual = 1
+}
+
+final class ManualFanLeaseController {
+  typealias ExpirationHandler = (Int) -> Void
+
+  private let duration: DispatchTimeInterval
+  private let queue: DispatchQueue
+  private let expirationHandler: ExpirationHandler
+  private var timers: [Int: DispatchSourceTimer] = [:]
+
+  init(
+    duration: DispatchTimeInterval,
+    queue: DispatchQueue = DispatchQueue(label: "ManualFanLeaseController"),
+    expirationHandler: @escaping ExpirationHandler
+  ) {
+    self.duration = duration
+    self.queue = queue
+    self.expirationHandler = expirationHandler
+  }
+
+  func arm(for fanIndex: Int) {
+    queue.sync {
+      cancelLocked(for: fanIndex)
+
+      let timer = DispatchSource.makeTimerSource(queue: queue)
+      timer.schedule(deadline: .now() + duration)
+      timer.setEventHandler { [weak self] in
+        self?.expireLease(for: fanIndex)
+      }
+      timers[fanIndex] = timer
+      timer.resume()
+    }
+  }
+
+  func cancel(for fanIndex: Int) {
+    queue.sync {
+      cancelLocked(for: fanIndex)
+    }
+  }
+
+  private func expireLease(for fanIndex: Int) {
+    cancelLocked(for: fanIndex)
+    expirationHandler(fanIndex)
+  }
+
+  private func cancelLocked(for fanIndex: Int) {
+    guard let timer = timers.removeValue(forKey: fanIndex) else {
+      return
+    }
+
+    timer.cancel()
+  }
+}
+
+protocol FanControlControlling: AnyObject {
+  func setFanMode(index: Int, mode: AppleSMCFanMode) throws
+  func setFanTargetRpm(index: Int, targetRpm: Int) throws
+  func applyManualTargetRpm(index: Int, targetRpm: Int) throws
 }
 
 @objc protocol FanControlXPCProtocol {
