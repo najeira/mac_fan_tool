@@ -11,12 +11,11 @@ import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class OverviewView extends ConsumerWidget {
-  const OverviewView({super.key, required this.isWide});
-
-  final bool isWide;
+  const OverviewView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isWide = ref.watch(dashboardIsWideProvider);
     final snapshot = ref.watch(monitorSnapshotProvider);
     final history = ref.watch(monitorHistoryProvider);
     final summary = ref.watch(dashboardSummaryProvider);

@@ -4,6 +4,10 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
+final dashboardIsWideProvider = Provider<bool>((ref) {
+  return false;
+}, dependencies: const []);
+
 final monitorSnapshotProvider = Provider<HardwareSnapshotData>((ref) {
   return ref.watch(monitorControllerProvider.select((state) => state.snapshot));
 });

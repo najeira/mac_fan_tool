@@ -25,36 +25,16 @@ class DashboardPage extends StatelessWidget {
           useMaterial3: true,
           fontFamily: '.AppleSystemUIFont',
         ),
-        child: Material(
-          color: Colors.transparent,
+        child: const Material(
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: <Color>[Color(0xFFF4F0E8), Color(0xFFE7EEF1)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
-            child: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 1180;
-
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const DashboardHeroPanel(),
-                        const _DashboardStatusBanners(),
-                        const SizedBox(height: 26),
-                        _DashboardBody(isWide: isWide),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
+            child: SafeArea(child: _DashboardLayout()),
           ),
         ),
       ),
@@ -62,10 +42,33 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody({required this.isWide});
+class _DashboardLayout extends StatelessWidget {
+  const _DashboardLayout();
 
-  final bool isWide;
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 1180;
+        return ProviderScope(
+          overrides: [dashboardIsWideProvider.overrideWithValue(isWide)],
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
+            children: const [
+              DashboardHeroPanel(),
+              _DashboardStatusBanners(),
+              SizedBox(height: 26),
+              _DashboardBody(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DashboardBody extends ConsumerWidget {
+  const _DashboardBody();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,11 +76,11 @@ class _DashboardBody extends ConsumerWidget {
 
     switch (view) {
       case DashboardView.overview:
-        return OverviewView(isWide: isWide);
+        return const OverviewView();
       case DashboardView.details:
-        return DetailsView(isWide: isWide);
+        return const DetailsView();
       case DashboardView.system:
-        return SystemView(isWide: isWide);
+        return const SystemView();
     }
   }
 }

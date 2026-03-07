@@ -8,13 +8,12 @@ import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/fan_control_card.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class SystemView extends StatelessWidget {
-  const SystemView({super.key, required this.isWide});
-
-  final bool isWide;
+class SystemView extends ConsumerWidget {
+  const SystemView({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isWide = ref.watch(dashboardIsWideProvider);
     const infoPanel = _SystemInfoPanel();
     const fansPanel = _FansPanel();
 
