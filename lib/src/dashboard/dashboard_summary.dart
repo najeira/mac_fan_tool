@@ -1,0 +1,89 @@
+import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
+import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
+
+class DashboardSummary {
+  const DashboardSummary({
+    required this.overallTemperature,
+    required this.cpuAverage,
+    required this.gpuAverage,
+    required this.powerAverage,
+    required this.diskAverage,
+    required this.memoryAverage,
+    required this.ambientAverage,
+    required this.sensorCount,
+    required this.cpuSensorCount,
+    required this.gpuSensorCount,
+    required this.powerSensorCount,
+    required this.diskSensorCount,
+    required this.memorySensorCount,
+    required this.ambientSensorCount,
+    required this.overallCaption,
+  });
+
+  factory DashboardSummary.fromSnapshot(HardwareSnapshot snapshot) {
+    final sensors = snapshot.sensors;
+    final cpu = cpuSensors(sensors);
+    final gpu = gpuSensors(sensors);
+    final power = powerSensors(sensors);
+    final disk = diskSensors(sensors);
+    final memory = memorySensors(sensors);
+    final ambient = ambientSensors(sensors);
+
+    final cpuAverage = mean(cpu.map((sensor) => sensor.value));
+    final gpuAverage = mean(gpu.map((sensor) => sensor.value));
+    final powerAverage = mean(power.map((sensor) => sensor.value));
+    final diskAverage = mean(disk.map((sensor) => sensor.value));
+    final memoryAverage = mean(memory.map((sensor) => sensor.value));
+    final ambientAverage = mean(ambient.map((sensor) => sensor.value));
+
+    final categoryAverages = [
+      cpuAverage,
+      gpuAverage,
+      powerAverage,
+      diskAverage,
+      memoryAverage,
+      ambientAverage,
+    ].whereType<double>().toList();
+
+    final overallTemperature = mean(categoryAverages);
+    final fallbackOverall =
+        overallTemperature ?? mean(sensors.map((sensor) => sensor.value));
+
+    return DashboardSummary(
+      overallTemperature: fallbackOverall,
+      cpuAverage: cpuAverage,
+      gpuAverage: gpuAverage,
+      powerAverage: powerAverage,
+      diskAverage: diskAverage,
+      memoryAverage: memoryAverage,
+      ambientAverage: ambientAverage,
+      sensorCount: sensors.length,
+      cpuSensorCount: cpu.length,
+      gpuSensorCount: gpu.length,
+      powerSensorCount: power.length,
+      diskSensorCount: disk.length,
+      memorySensorCount: memory.length,
+      ambientSensorCount: ambient.length,
+      overallCaption: categoryAverages.isEmpty
+          ? 'Waiting for enough temperature channels to calculate a balanced system reading.'
+          : 'Balanced mean of CPU, GPU, power, disk, memory, and ambient groups when available.',
+    );
+  }
+
+  final double? overallTemperature;
+  final double? cpuAverage;
+  final double? gpuAverage;
+  final double? powerAverage;
+  final double? diskAverage;
+  final double? memoryAverage;
+  final double? ambientAverage;
+
+  final int sensorCount;
+  final int cpuSensorCount;
+  final int gpuSensorCount;
+  final int powerSensorCount;
+  final int diskSensorCount;
+  final int memorySensorCount;
+  final int ambientSensorCount;
+  final String overallCaption;
+}
