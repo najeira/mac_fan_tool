@@ -60,13 +60,12 @@ class _DashboardLayout extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
             children: [
               const DashboardDebugPanel(),
+              const _DashboardStatusBanners(),
+              const SizedBox(height: 26),
               if (showLoadingPanel) ...const [
-                _DashboardStatusBanners(),
-                SizedBox(height: 26),
                 DashboardLoadingPanel(),
               ] else ...const [
                 DashboardHeroPanel(),
-                _DashboardStatusBanners(),
                 SizedBox(height: 26),
                 _DashboardBody(),
               ],

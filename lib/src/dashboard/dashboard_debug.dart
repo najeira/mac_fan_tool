@@ -92,7 +92,6 @@ class DashboardDebugPanel extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     return Container(
-      margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8F4ED),
