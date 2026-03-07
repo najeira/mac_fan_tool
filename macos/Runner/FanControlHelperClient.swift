@@ -17,9 +17,9 @@ final class FanControlHelperClient {
       return false
     case let .available(_, status):
       switch status {
-      case .enabled, .notRegistered:
+      case .enabled, .notRegistered, .notFound:
         return true
-      case .requiresApproval, .notFound:
+      case .requiresApproval:
         return false
       case .unknown:
         return false
@@ -44,7 +44,7 @@ final class FanControlHelperClient {
       case .requiresApproval:
         return "Approve the privileged fan helper in System Settings > General > Login Items before applying manual RPM."
       case .notFound:
-        return "macOS could not validate the bundled privileged fan helper in this build."
+        return "macOS could not validate the bundled privileged fan helper. The next fan command will try to refresh its registration."
       case .unknown:
         return "The privileged fan helper reported an unknown registration state."
       }
@@ -96,45 +96,101 @@ final class FanControlHelperClient {
     case .enabled:
       return
 
-    case .notRegistered:
-      do {
-        try environment.service.register()
-      } catch {
-        let nsError = error as NSError
-        if nsError.code != kSMErrorAlreadyRegistered {
-          throw FanControlHelperClientError.registrationFailed(
-            message: registrationFailureMessage(for: nsError)
-          )
-        }
-      }
-
-      switch environment.service.status {
-      case .enabled:
-        return
-      case .requiresApproval:
-        throw FanControlHelperClientError.requiresApproval
-      case .notFound:
-        throw FanControlHelperClientError.helperMissing
-      case .notRegistered:
-        throw FanControlHelperClientError.registrationFailed(
-          message: "macOS did not keep the privileged helper registered."
-        )
-      @unknown default:
-        throw FanControlHelperClientError.registrationFailed(
-          message: "The privileged helper returned an unknown registration state."
-        )
-      }
+    case .notRegistered, .notFound:
+      try registerService(environment: environment, allowReset: true)
+      try ensureRegisteredStatus(environment: environment)
 
     case .requiresApproval:
       throw FanControlHelperClientError.requiresApproval
-
-    case .notFound:
-      throw FanControlHelperClientError.helperMissing
 
     @unknown default:
       throw FanControlHelperClientError.registrationFailed(
         message: "The privileged helper returned an unknown registration state."
       )
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func registerService(
+    environment: ResolvedEnvironment,
+    allowReset: Bool
+  ) throws {
+    do {
+      try environment.service.register()
+    } catch {
+      let nsError = error as NSError
+
+      if allowReset && shouldResetRegistration(status: environment.service.status, error: nsError) {
+        try resetRegistration(environment: environment)
+        try registerService(environment: environment, allowReset: false)
+        return
+      }
+
+      if nsError.code != kSMErrorAlreadyRegistered {
+        throw FanControlHelperClientError.registrationFailed(
+          message: registrationFailureMessage(for: nsError)
+        )
+      }
+    }
+
+    if allowReset && environment.service.status == .notFound {
+      try resetRegistration(environment: environment)
+      try registerService(environment: environment, allowReset: false)
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func resetRegistration(environment: ResolvedEnvironment) throws {
+    do {
+      try environment.service.unregister()
+    } catch {
+      let nsError = error as NSError
+      if nsError.code != kSMErrorJobNotFound {
+        throw FanControlHelperClientError.registrationFailed(
+          message: registrationFailureMessage(for: nsError)
+        )
+      }
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func ensureRegisteredStatus(environment: ResolvedEnvironment) throws {
+    switch environment.service.status {
+    case .enabled:
+      return
+    case .requiresApproval:
+      throw FanControlHelperClientError.requiresApproval
+    case .notFound:
+      throw FanControlHelperClientError.helperUnavailable
+    case .notRegistered:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "macOS did not keep the privileged helper registered."
+      )
+    @unknown default:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "The privileged helper returned an unknown registration state."
+      )
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func shouldResetRegistration(
+    status: SMAppService.Status,
+    error: NSError
+  ) -> Bool {
+    if status == .notFound {
+      return true
+    }
+
+    switch error.code {
+    case kSMErrorAlreadyRegistered,
+      kSMErrorJobPlistNotFound,
+      kSMErrorInvalidPlist,
+      kSMErrorToolNotValid,
+      kSMErrorInvalidSignature:
+      return true
+    default:
+      return false
     }
   }
 
@@ -236,6 +292,8 @@ final class FanControlHelperClient {
       return "macOS refused the authorization needed to register the privileged helper."
     case kSMErrorToolNotValid, kSMErrorJobPlistNotFound, kSMErrorInvalidPlist:
       return "The bundled privileged helper could not be validated by macOS."
+    case kSMErrorJobNotFound:
+      return "macOS could not find the helper registration after refreshing it."
     case kSMErrorLaunchDeniedByUser:
       return FanControlHelperClientError.requiresApproval.message
     default:
@@ -405,6 +463,7 @@ enum FanControlHelperClientError: Error {
   case configurationInvalid(String)
   case installToApplications
   case helperMissing
+  case helperUnavailable
   case signedBuildRequired(String)
   case requiresApproval
   case registrationFailed(message: String)
@@ -423,6 +482,8 @@ enum FanControlHelperClientError: Error {
       return "Install the signed app in /Applications before using fan control."
     case .helperMissing:
       return "The bundled privileged fan helper is missing from this build."
+    case .helperUnavailable:
+      return "macOS could not validate or register the bundled privileged fan helper."
     case let .signedBuildRequired(message):
       return "Fan control requires a signed build: \(message)"
     case .requiresApproval:
