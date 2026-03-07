@@ -10,6 +10,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('Mac Fan Tool'), findsOneWidget);
-    expect(find.text('Hardware Bridge'), findsOneWidget);
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Composite Thermal'), findsOneWidget);
   });
 }

@@ -8,13 +8,23 @@ import 'package:macos_ui/macos_ui.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class DashboardPage extends ConsumerWidget {
+enum _DashboardView { overview, details, system }
+
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends ConsumerState<DashboardPage> {
+  _DashboardView _selectedView = _DashboardView.overview;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(monitorControllerProvider);
     final controller = ref.read(monitorControllerProvider.notifier);
+    final summary = _DashboardSummary.fromSnapshot(state.snapshot);
 
     return MacosWindow(
       child: Theme(
@@ -48,6 +58,13 @@ class DashboardPage extends ConsumerWidget {
                       children: [
                         _HeroPanel(
                           state: state,
+                          summary: summary,
+                          selectedView: _selectedView,
+                          onViewSelected: (view) {
+                            setState(() {
+                              _selectedView = view;
+                            });
+                          },
                           onRefresh: state.isRefreshing
                               ? null
                               : () => controller.refresh(),
@@ -71,51 +88,13 @@ class DashboardPage extends ConsumerWidget {
                           _NoticeBanner(tone: _NoticeTone.info, message: note),
                         ],
                         const SizedBox(height: 26),
-                        _OverviewMetrics(state: state),
-                        const SizedBox(height: 24),
-                        if (isWide)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _SensorsPanel(state: state),
-                                    const SizedBox(height: 20),
-                                    _HistoryPanel(state: state),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _FansPanel(
-                                      state: state,
-                                      controller: controller,
-                                    ),
-                                    const SizedBox(height: 20),
-                                    _HardwareBridgePanel(state: state),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _SensorsPanel(state: state),
-                              const SizedBox(height: 20),
-                              _FansPanel(state: state, controller: controller),
-                              const SizedBox(height: 20),
-                              _HistoryPanel(state: state),
-                              const SizedBox(height: 20),
-                              _HardwareBridgePanel(state: state),
-                            ],
-                          ),
+                        _DashboardBody(
+                          view: _selectedView,
+                          state: state,
+                          summary: summary,
+                          controller: controller,
+                          isWide: isWide,
+                        ),
                       ],
                     ),
                   );
@@ -129,15 +108,56 @@ class DashboardPage extends ConsumerWidget {
   }
 }
 
+class _DashboardBody extends StatelessWidget {
+  const _DashboardBody({
+    required this.view,
+    required this.state,
+    required this.summary,
+    required this.controller,
+    required this.isWide,
+  });
+
+  final _DashboardView view;
+  final MonitorState state;
+  final _DashboardSummary summary;
+  final MonitorController controller;
+  final bool isWide;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (view) {
+      case _DashboardView.overview:
+        return _OverviewView(state: state, summary: summary, isWide: isWide);
+      case _DashboardView.details:
+        return _DetailsView(state: state, summary: summary, isWide: isWide);
+      case _DashboardView.system:
+        return _SystemView(
+          state: state,
+          summary: summary,
+          controller: controller,
+          isWide: isWide,
+        );
+    }
+  }
+}
+
 class _HeroPanel extends StatelessWidget {
-  const _HeroPanel({required this.state, required this.onRefresh});
+  const _HeroPanel({
+    required this.state,
+    required this.summary,
+    required this.selectedView,
+    required this.onViewSelected,
+    required this.onRefresh,
+  });
 
   final MonitorState state;
+  final _DashboardSummary summary;
+  final _DashboardView selectedView;
+  final ValueChanged<_DashboardView> onViewSelected;
   final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final cpuSensor = _selectPrimaryCpuSensor(state.snapshot.sensors);
     final foreground = Theme.of(context).colorScheme.onPrimary;
 
     return Container(
@@ -174,11 +194,16 @@ class _HeroPanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Riverpod dashboard plus Pigeon bridge scaffold for raw thermals and fan control on macOS.',
+                      'Overview first, sensor detail second. Switch between aggregate thermals, per-channel temperatures, and system information.',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: foreground.withValues(alpha: 0.82),
                         height: 1.35,
                       ),
+                    ),
+                    const SizedBox(height: 18),
+                    _ViewSwitcher(
+                      selectedView: selectedView,
+                      onViewSelected: onViewSelected,
                     ),
                     const SizedBox(height: 18),
                     Wrap(
@@ -200,31 +225,36 @@ class _HeroPanel extends StatelessWidget {
                           color: _thermalChipColor(state.snapshot.thermalState),
                           foreground: foreground,
                         ),
-                        if (cpuSensor != null)
-                          _PillChip(
-                            label:
-                                '${cpuSensor.value.toStringAsFixed(1)} ${cpuSensor.unit}',
-                            color: const Color(0xFF6A4A2A),
-                            foreground: foreground,
-                          ),
+                        _PillChip(
+                          label: _summaryChipLabel(summary),
+                          color: const Color(0xFF6A4A2A),
+                          foreground: foreground,
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 20),
-              FilledButton.icon(
-                onPressed: onRefresh,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFDBE9EB),
-                  foregroundColor: const Color(0xFF0F1D24),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 18,
+              const SizedBox(width: 18),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FilledButton.icon(
+                    onPressed: onRefresh,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFDBE9EB),
+                      foregroundColor: const Color(0xFF0F1D24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 18,
+                      ),
+                    ),
+                    icon: Icon(state.isRefreshing ? Icons.sync : Icons.refresh),
+                    label: Text(state.isRefreshing ? 'Refreshing' : 'Refresh'),
                   ),
-                ),
-                icon: Icon(state.isRefreshing ? Icons.sync : Icons.refresh),
-                label: Text(state.isRefreshing ? 'Refreshing' : 'Refresh'),
+                  const SizedBox(height: 18),
+                  _PrimaryMetricPanel(summary: summary),
+                ],
               ),
             ],
           ),
@@ -241,78 +271,550 @@ class _HeroPanel extends StatelessWidget {
   }
 }
 
-class _OverviewMetrics extends StatelessWidget {
-  const _OverviewMetrics({required this.state});
+class _ViewSwitcher extends StatelessWidget {
+  const _ViewSwitcher({
+    required this.selectedView,
+    required this.onViewSelected,
+  });
 
-  final MonitorState state;
+  final _DashboardView selectedView;
+  final ValueChanged<_DashboardView> onViewSelected;
 
   @override
   Widget build(BuildContext context) {
-    final cpuSensor = _selectPrimaryCpuSensor(state.snapshot.sensors);
+    return SegmentedButton<_DashboardView>(
+      segments: const [
+        ButtonSegment<_DashboardView>(
+          value: _DashboardView.overview,
+          icon: Icon(Icons.dashboard_outlined),
+          label: Text('Overview'),
+        ),
+        ButtonSegment<_DashboardView>(
+          value: _DashboardView.details,
+          icon: Icon(Icons.thermostat_outlined),
+          label: Text('Details'),
+        ),
+        ButtonSegment<_DashboardView>(
+          value: _DashboardView.system,
+          icon: Icon(Icons.memory_outlined),
+          label: Text('System'),
+        ),
+      ],
+      selected: <_DashboardView>{selectedView},
+      showSelectedIcon: false,
+      multiSelectionEnabled: false,
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFFDBE9EB);
+          }
+          return const Color(0xFF24414E);
+        }),
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFF0F1D24);
+          }
+          return Colors.white;
+        }),
+        side: const WidgetStatePropertyAll(
+          BorderSide(color: Color(0xFF3A5361)),
+        ),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
+      onSelectionChanged: (selection) {
+        final next = selection.firstOrNull;
+        if (next != null) {
+          onViewSelected(next);
+        }
+      },
+    );
+  }
+}
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
+class _PrimaryMetricPanel extends StatelessWidget {
+  const _PrimaryMetricPanel({required this.summary});
+
+  final _DashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0x1AE7EEF1),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0x335A7380)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Composite Thermal',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Colors.white.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _formatTemperature(summary.overallTemperature),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            summary.overallCaption,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.72),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverviewView extends StatelessWidget {
+  const _OverviewView({
+    required this.state,
+    required this.summary,
+    required this.isWide,
+  });
+
+  final MonitorState state;
+  final _DashboardSummary summary;
+  final bool isWide;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      _MetricCard(
+        label: 'CPU Avg',
+        value: _formatTemperature(summary.cpuAverage),
+        caption: _sensorCountCaption(summary.cpuSensorCount, 'CPU'),
+      ),
+      _MetricCard(
+        label: 'GPU Avg',
+        value: _formatTemperature(summary.gpuAverage),
+        caption: _sensorCountCaption(summary.gpuSensorCount, 'GPU'),
+      ),
+      _MetricCard(
+        label: 'Power Avg',
+        value: _formatTemperature(summary.powerAverage),
+        caption: _sensorCountCaption(summary.powerSensorCount, 'power'),
+      ),
+      _MetricCard(
+        label: 'Disk Avg',
+        value: _formatTemperature(summary.diskAverage),
+        caption: _sensorCountCaption(summary.diskSensorCount, 'disk'),
+      ),
+      _MetricCard(
+        label: 'Memory Avg',
+        value: _formatTemperature(summary.memoryAverage),
+        caption: _sensorCountCaption(summary.memorySensorCount, 'memory'),
+      ),
+      _MetricCard(
+        label: 'Last Sample',
+        value: _sampleAge(state.snapshot.capturedAt),
+        caption: 'Updated ${_formatSampleTime(state.snapshot.capturedAt)}',
+      ),
+    ];
+
+    final trendPanel = _ThermalTrendPanel(state: state);
+    final breakdownPanel = _CategoryBreakdownPanel(summary: summary);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _MetricCard(
-          label: 'CPU Sensor',
-          value: cpuSensor == null
-              ? 'Pending'
-              : '${cpuSensor.value.toStringAsFixed(1)} ${cpuSensor.unit}',
-          caption: cpuSensor == null
-              ? 'Raw SMC/HID sensor not connected yet'
-              : cpuSensor.name,
-        ),
-        _MetricCard(
-          label: 'Fans',
-          value: state.snapshot.fans.isEmpty
-              ? 'Unavailable'
-              : '${state.snapshot.fans.length}',
-          caption: state.capabilities.hasFans
-              ? 'Reported by the native bridge'
-              : 'No active fan telemetry from the backend',
-        ),
-        _MetricCard(
-          label: 'Fan Control',
-          value: state.capabilities.supportsFanControl
-              ? 'Enabled'
-              : 'Read only',
-          caption: state.capabilities.supportsFanControl
-              ? 'Manual fan commands can be sent'
-              : 'Bridge is scaffolded but write path is not wired yet',
-        ),
-        _MetricCard(
-          label: 'Last Sample',
-          value: _sampleAge(state.snapshot.capturedAt),
-          caption: 'Updated ${_formatSampleTime(state.snapshot.capturedAt)}',
-        ),
+        Wrap(spacing: 16, runSpacing: 16, children: cards),
+        const SizedBox(height: 24),
+        if (isWide)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: trendPanel),
+              const SizedBox(width: 20),
+              Expanded(child: breakdownPanel),
+            ],
+          )
+        else ...[
+          trendPanel,
+          const SizedBox(height: 20),
+          breakdownPanel,
+        ],
       ],
     );
   }
 }
 
-class _SensorsPanel extends StatelessWidget {
-  const _SensorsPanel({required this.state});
+class _ThermalTrendPanel extends StatelessWidget {
+  const _ThermalTrendPanel({required this.state});
 
   final MonitorState state;
 
   @override
   Widget build(BuildContext context) {
+    final summaries = [
+      for (final snapshot in state.history)
+        _DashboardSummary.fromSnapshot(snapshot),
+    ];
+    final series = _buildTrendSeries(summaries);
+
     return _SectionPanel(
-      title: 'Sensors',
-      subtitle: 'CPU and thermal channels from the native bridge.',
-      child: state.snapshot.sensors.isEmpty
+      title: 'Thermal Trend',
+      subtitle:
+          'Composite, CPU average, and GPU average over the recent polling window.',
+      child: series.every((item) => item.spots.length < 2)
           ? const _EmptyPanel(
-              icon: Icons.thermostat,
+              icon: Icons.show_chart,
               message:
-                  'Raw sensor values will appear here once the SMC/HID reader is connected.',
+                  'The chart appears once at least two aggregated samples are available.',
             )
           : Column(
               children: [
-                for (final sensor in state.snapshot.sensors) ...[
+                SizedBox(
+                  height: 240,
+                  child: LineChart(
+                    LineChartData(
+                      minX: 0,
+                      maxX: _trendMaxX(series),
+                      minY: _trendMinY(series),
+                      maxY: _trendMaxY(series),
+                      lineTouchData: const LineTouchData(enabled: false),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: _trendInterval(series),
+                        getDrawingHorizontalLine: (_) => const FlLine(
+                          color: Color(0x22354B55),
+                          strokeWidth: 1,
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      titlesData: FlTitlesData(
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        bottomTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 48,
+                            interval: _trendInterval(series),
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                '${value.toStringAsFixed(0)}°',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(color: const Color(0xFF50636A)),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      lineBarsData: [
+                        for (final item in series)
+                          LineChartBarData(
+                            isCurved: true,
+                            barWidth: 3,
+                            color: item.color,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: item.fillColor == null
+                                ? BarAreaData(show: false)
+                                : BarAreaData(
+                                    show: true,
+                                    color: item.fillColor,
+                                  ),
+                            spots: item.spots,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 14,
+                  runSpacing: 10,
+                  children: [
+                    for (final item in series.where(
+                      (series) => series.spots.isNotEmpty,
+                    ))
+                      _LegendChip(color: item.color, label: item.label),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _CategoryBreakdownPanel extends StatelessWidget {
+  const _CategoryBreakdownPanel({required this.summary});
+
+  final _DashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = [
+      _SummaryCategory(
+        label: 'CPU',
+        value: summary.cpuAverage,
+        count: summary.cpuSensorCount,
+        color: _sensorColor(SensorKind.cpu),
+      ),
+      _SummaryCategory(
+        label: 'GPU',
+        value: summary.gpuAverage,
+        count: summary.gpuSensorCount,
+        color: _sensorColor(SensorKind.gpu),
+      ),
+      _SummaryCategory(
+        label: 'Power',
+        value: summary.powerAverage,
+        count: summary.powerSensorCount,
+        color: const Color(0xFF7A5B34),
+      ),
+      _SummaryCategory(
+        label: 'Disk',
+        value: summary.diskAverage,
+        count: summary.diskSensorCount,
+        color: const Color(0xFF546A36),
+      ),
+      _SummaryCategory(
+        label: 'Memory',
+        value: summary.memoryAverage,
+        count: summary.memorySensorCount,
+        color: _sensorColor(SensorKind.memory),
+      ),
+      _SummaryCategory(
+        label: 'Ambient',
+        value: summary.ambientAverage,
+        count: summary.ambientSensorCount,
+        color: _sensorColor(SensorKind.ambient),
+      ),
+    ];
+
+    final maxValue = categories
+        .map((category) => category.value ?? 0)
+        .fold<double>(0, math.max);
+
+    return _SectionPanel(
+      title: 'Category Snapshot',
+      subtitle:
+          'Balanced averages by thermal domain so one large sensor family does not dominate the overview.',
+      child: Column(
+        children: [
+          for (final category in categories) ...[
+            _CategoryBarRow(
+              category: category,
+              maxValue: maxValue <= 0 ? 1 : maxValue,
+            ),
+            if (category != categories.last) const SizedBox(height: 16),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailsView extends StatelessWidget {
+  const _DetailsView({
+    required this.state,
+    required this.summary,
+    required this.isWide,
+  });
+
+  final MonitorState state;
+  final _DashboardSummary summary;
+  final bool isWide;
+
+  @override
+  Widget build(BuildContext context) {
+    final cpuSensors = _cpuSensors(state.snapshot.sensors);
+    final gpuSensors = _gpuSensors(state.snapshot.sensors);
+    final supportingSensors = _supportingSensors(state.snapshot.sensors);
+
+    final cpuPanel = _SensorGroupPanel(
+      title: 'CPU Channels',
+      subtitle:
+          'Individual CPU-related temperature channels. Average ${_formatTemperature(summary.cpuAverage)}.',
+      sensors: cpuSensors,
+      emptyMessage:
+          'No CPU temperature channels are available from the bridge.',
+      emptyIcon: Icons.memory_outlined,
+    );
+
+    final gpuPanel = _SensorGroupPanel(
+      title: 'GPU Channels',
+      subtitle:
+          'Individual GPU-related temperature channels. Average ${_formatTemperature(summary.gpuAverage)}.',
+      sensors: gpuSensors,
+      emptyMessage:
+          'No GPU temperature channels are available from the bridge.',
+      emptyIcon: Icons.graphic_eq_outlined,
+    );
+
+    final supportingPanel = _SensorGroupPanel(
+      title: 'Supporting Thermals',
+      subtitle:
+          'Memory, storage, power, ambient, and other supporting temperature channels.',
+      sensors: supportingSensors,
+      emptyMessage:
+          'No supporting thermal channels are available from the bridge.',
+      emptyIcon: Icons.developer_board_outlined,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isWide)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: cpuPanel),
+              const SizedBox(width: 20),
+              Expanded(child: gpuPanel),
+            ],
+          )
+        else ...[
+          cpuPanel,
+          const SizedBox(height: 20),
+          gpuPanel,
+        ],
+        const SizedBox(height: 20),
+        supportingPanel,
+      ],
+    );
+  }
+}
+
+class _SystemView extends StatelessWidget {
+  const _SystemView({
+    required this.state,
+    required this.summary,
+    required this.controller,
+    required this.isWide,
+  });
+
+  final MonitorState state;
+  final _DashboardSummary summary;
+  final MonitorController controller;
+  final bool isWide;
+
+  @override
+  Widget build(BuildContext context) {
+    final infoPanel = _SystemInfoPanel(state: state, summary: summary);
+    final fansPanel = _FansPanel(state: state, controller: controller);
+
+    if (isWide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: infoPanel),
+          const SizedBox(width: 20),
+          Expanded(child: fansPanel),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [infoPanel, const SizedBox(height: 20), fansPanel],
+    );
+  }
+}
+
+class _SystemInfoPanel extends StatelessWidget {
+  const _SystemInfoPanel({required this.state, required this.summary});
+
+  final MonitorState state;
+  final _DashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionPanel(
+      title: 'Hardware Bridge',
+      subtitle:
+          'Device identity, backend status, and the amount of data currently visible to the dashboard.',
+      child: Column(
+        children: [
+          _KeyValueRow(label: 'Computer', value: state.device.computerName),
+          const Divider(height: 24),
+          _KeyValueRow(label: 'Model', value: state.device.model),
+          const Divider(height: 24),
+          _KeyValueRow(label: 'Architecture', value: state.device.architecture),
+          const Divider(height: 24),
+          _KeyValueRow(label: 'macOS Release', value: state.device.osVersion),
+          const Divider(height: 24),
+          _KeyValueRow(label: 'Backend', value: state.capabilities.backend),
+          const Divider(height: 24),
+          _KeyValueRow(
+            label: 'Raw Sensors',
+            value: state.capabilities.supportsRawSensors
+                ? '${summary.sensorCount} channels'
+                : 'Not available yet',
+          ),
+          const Divider(height: 24),
+          _KeyValueRow(
+            label: 'Fans',
+            value: state.capabilities.hasFans
+                ? '${state.snapshot.fans.length} reported'
+                : 'Unavailable',
+          ),
+          const Divider(height: 24),
+          _KeyValueRow(
+            label: 'Fan Control',
+            value: state.capabilities.supportsFanControl
+                ? 'Writable'
+                : 'Read only',
+          ),
+          const Divider(height: 24),
+          _KeyValueRow(
+            label: 'Composite Thermal',
+            value: _formatTemperature(summary.overallTemperature),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SensorGroupPanel extends StatelessWidget {
+  const _SensorGroupPanel({
+    required this.title,
+    required this.subtitle,
+    required this.sensors,
+    required this.emptyMessage,
+    required this.emptyIcon,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<SensorReading> sensors;
+  final String emptyMessage;
+  final IconData emptyIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionPanel(
+      title: title,
+      subtitle: subtitle,
+      child: sensors.isEmpty
+          ? _EmptyPanel(icon: emptyIcon, message: emptyMessage)
+          : Column(
+              children: [
+                for (final sensor in sensors) ...[
                   _SensorRow(sensor: sensor),
-                  if (sensor != state.snapshot.sensors.last)
-                    const Divider(height: 24),
+                  if (sensor != sensors.last) const Divider(height: 24),
                 ],
               ],
             ),
@@ -330,7 +832,7 @@ class _FansPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SectionPanel(
       title: 'Fans',
-      subtitle: 'Manual RPM targets and automatic mode handoff.',
+      subtitle: 'Current fan telemetry and manual RPM controls.',
       child: state.snapshot.fans.isEmpty
           ? const _EmptyPanel(
               icon: Icons.wind_power,
@@ -353,130 +855,6 @@ class _FansPanel extends StatelessWidget {
                 ],
               ],
             ),
-    );
-  }
-}
-
-class _HistoryPanel extends StatelessWidget {
-  const _HistoryPanel({required this.state});
-
-  final MonitorState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final points = _cpuHistory(state.history);
-
-    return _SectionPanel(
-      title: 'CPU Temperature History',
-      subtitle: 'Rolling history from the polling loop.',
-      child: points.length < 2
-          ? const _EmptyPanel(
-              icon: Icons.show_chart,
-              message:
-                  'The chart will populate once at least two CPU samples are available.',
-            )
-          : SizedBox(
-              height: 240,
-              child: LineChart(
-                LineChartData(
-                  minX: 0,
-                  maxX: math.max(1, points.length - 1).toDouble(),
-                  minY: _minY(points),
-                  maxY: _maxY(points),
-                  lineTouchData: const LineTouchData(enabled: false),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: _chartInterval(points),
-                    getDrawingHorizontalLine: (_) =>
-                        const FlLine(color: Color(0x22354B55), strokeWidth: 1),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    bottomTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 46,
-                        interval: _chartInterval(points),
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            '${value.toStringAsFixed(0)}°',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(color: const Color(0xFF50636A)),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      isCurved: true,
-                      barWidth: 4,
-                      color: const Color(0xFF2C8C7A),
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: const Color(0x332C8C7A),
-                      ),
-                      spots: [
-                        for (final entry in points.asMap().entries)
-                          FlSpot(entry.key.toDouble(), entry.value),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-    );
-  }
-}
-
-class _HardwareBridgePanel extends StatelessWidget {
-  const _HardwareBridgePanel({required this.state});
-
-  final MonitorState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionPanel(
-      title: 'Hardware Bridge',
-      subtitle: 'Current device identity and native backend capabilities.',
-      child: Column(
-        children: [
-          _KeyValueRow(label: 'Computer', value: state.device.computerName),
-          const Divider(height: 24),
-          _KeyValueRow(label: 'Model', value: state.device.model),
-          const Divider(height: 24),
-          _KeyValueRow(label: 'Architecture', value: state.device.architecture),
-          const Divider(height: 24),
-          _KeyValueRow(label: 'macOS Release', value: state.device.osVersion),
-          const Divider(height: 24),
-          _KeyValueRow(label: 'Backend', value: state.capabilities.backend),
-          const Divider(height: 24),
-          _KeyValueRow(
-            label: 'Raw Sensors',
-            value: state.capabilities.supportsRawSensors
-                ? 'Available'
-                : 'Not available yet',
-          ),
-          const Divider(height: 24),
-          _KeyValueRow(
-            label: 'Fan Control',
-            value: state.capabilities.supportsFanControl
-                ? 'Writable'
-                : 'Disabled',
-          ),
-        ],
-      ),
     );
   }
 }
@@ -678,7 +1056,7 @@ class _MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 240,
+      width: 220,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFFFDFBF8),
@@ -711,6 +1089,109 @@ class _MetricCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LegendChip extends StatelessWidget {
+  const _LegendChip({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: const Color(0xFF314951),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryBarRow extends StatelessWidget {
+  const _CategoryBarRow({required this.category, required this.maxValue});
+
+  final _SummaryCategory category;
+  final double maxValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = category.value == null ? 0.0 : (category.value! / maxValue);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 92,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                category.label,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                category.count <= 0
+                    ? 'No sensors'
+                    : '${category.count} sensors',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: const Color(0xFF61757D)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio.clamp(0, 1),
+              minHeight: 12,
+              backgroundColor: const Color(0xFFE7ECEE),
+              color: category.color,
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        SizedBox(
+          width: 92,
+          child: Text(
+            _formatTemperature(category.value),
+            textAlign: TextAlign.end,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -924,6 +1405,121 @@ class _KeyValueRow extends StatelessWidget {
   }
 }
 
+class _TrendSeries {
+  const _TrendSeries({
+    required this.label,
+    required this.color,
+    required this.spots,
+    this.fillColor,
+  });
+
+  final String label;
+  final Color color;
+  final List<FlSpot> spots;
+  final Color? fillColor;
+}
+
+class _SummaryCategory {
+  const _SummaryCategory({
+    required this.label,
+    required this.value,
+    required this.count,
+    required this.color,
+  });
+
+  final String label;
+  final double? value;
+  final int count;
+  final Color color;
+}
+
+class _DashboardSummary {
+  const _DashboardSummary({
+    required this.overallTemperature,
+    required this.cpuAverage,
+    required this.gpuAverage,
+    required this.powerAverage,
+    required this.diskAverage,
+    required this.memoryAverage,
+    required this.ambientAverage,
+    required this.sensorCount,
+    required this.cpuSensorCount,
+    required this.gpuSensorCount,
+    required this.powerSensorCount,
+    required this.diskSensorCount,
+    required this.memorySensorCount,
+    required this.ambientSensorCount,
+    required this.overallCaption,
+  });
+
+  factory _DashboardSummary.fromSnapshot(HardwareSnapshot snapshot) {
+    final sensors = snapshot.sensors;
+    final cpu = _cpuSensors(sensors);
+    final gpu = _gpuSensors(sensors);
+    final power = _powerSensors(sensors);
+    final disk = _diskSensors(sensors);
+    final memory = _memorySensors(sensors);
+    final ambient = _ambientSensors(sensors);
+
+    final cpuAverage = _mean(cpu.map((sensor) => sensor.value));
+    final gpuAverage = _mean(gpu.map((sensor) => sensor.value));
+    final powerAverage = _mean(power.map((sensor) => sensor.value));
+    final diskAverage = _mean(disk.map((sensor) => sensor.value));
+    final memoryAverage = _mean(memory.map((sensor) => sensor.value));
+    final ambientAverage = _mean(ambient.map((sensor) => sensor.value));
+
+    final categoryAverages = [
+      cpuAverage,
+      gpuAverage,
+      powerAverage,
+      diskAverage,
+      memoryAverage,
+      ambientAverage,
+    ].whereType<double>();
+
+    final overallTemperature = _mean(categoryAverages);
+    final fallbackOverall =
+        overallTemperature ?? _mean(sensors.map((sensor) => sensor.value));
+
+    return _DashboardSummary(
+      overallTemperature: fallbackOverall,
+      cpuAverage: cpuAverage,
+      gpuAverage: gpuAverage,
+      powerAverage: powerAverage,
+      diskAverage: diskAverage,
+      memoryAverage: memoryAverage,
+      ambientAverage: ambientAverage,
+      sensorCount: sensors.length,
+      cpuSensorCount: cpu.length,
+      gpuSensorCount: gpu.length,
+      powerSensorCount: power.length,
+      diskSensorCount: disk.length,
+      memorySensorCount: memory.length,
+      ambientSensorCount: ambient.length,
+      overallCaption: categoryAverages.isEmpty
+          ? 'Waiting for enough temperature channels to calculate a balanced system reading.'
+          : 'Balanced mean of CPU, GPU, power, disk, memory, and ambient groups when available.',
+    );
+  }
+
+  final double? overallTemperature;
+  final double? cpuAverage;
+  final double? gpuAverage;
+  final double? powerAverage;
+  final double? diskAverage;
+  final double? memoryAverage;
+  final double? ambientAverage;
+
+  final int sensorCount;
+  final int cpuSensorCount;
+  final int gpuSensorCount;
+  final int powerSensorCount;
+  final int diskSensorCount;
+  final int memorySensorCount;
+  final int ambientSensorCount;
+  final String overallCaption;
+}
+
 String? _hardwareNote(MonitorState state) {
   return state.snapshot.note ?? state.capabilities.note ?? state.device.note;
 }
@@ -958,41 +1554,93 @@ Color _thermalChipColor(ThermalStateLevel level) {
   }
 }
 
-SensorReading? _selectPrimaryCpuSensor(List<SensorReading> sensors) {
-  for (final sensor in sensors) {
-    if (sensor.kind == SensorKind.cpu) {
-      return sensor;
-    }
+String _summaryChipLabel(_DashboardSummary summary) {
+  if (summary.overallTemperature == null) {
+    return 'Composite pending';
   }
-
-  return sensors.isEmpty ? null : sensors.first;
+  return 'Composite ${summary.overallTemperature!.toStringAsFixed(1)} C';
 }
 
-List<double> _cpuHistory(List<HardwareSnapshot> history) {
-  final points = <double>[];
-
-  for (final snapshot in history) {
-    final sensor = _selectPrimaryCpuSensor(snapshot.sensors);
-    if (sensor != null && sensor.kind == SensorKind.cpu) {
-      points.add(sensor.value);
-    }
+String _formatTemperature(double? value) {
+  if (value == null) {
+    return 'Unavailable';
   }
-
-  return points;
+  return '${value.toStringAsFixed(1)} C';
 }
 
-double _minY(List<double> points) {
-  final minimum = points.reduce(math.min);
+String _sensorCountCaption(int count, String category) {
+  if (count <= 0) {
+    return 'No $category channels available yet';
+  }
+  return '$count $category channel${count == 1 ? '' : 's'} aggregated';
+}
+
+List<_TrendSeries> _buildTrendSeries(List<_DashboardSummary> summaries) {
+  List<FlSpot> buildSpots(double? Function(_DashboardSummary) selector) {
+    final spots = <FlSpot>[];
+    for (final entry in summaries.asMap().entries) {
+      final value = selector(entry.value);
+      if (value != null) {
+        spots.add(FlSpot(entry.key.toDouble(), value));
+      }
+    }
+    return spots;
+  }
+
+  return [
+    _TrendSeries(
+      label: 'Composite',
+      color: const Color(0xFF2C8C7A),
+      fillColor: const Color(0x222C8C7A),
+      spots: buildSpots((summary) => summary.overallTemperature),
+    ),
+    _TrendSeries(
+      label: 'CPU Avg',
+      color: const Color(0xFF265C6A),
+      spots: buildSpots((summary) => summary.cpuAverage),
+    ),
+    _TrendSeries(
+      label: 'GPU Avg',
+      color: const Color(0xFF9B5B26),
+      spots: buildSpots((summary) => summary.gpuAverage),
+    ),
+  ];
+}
+
+double _trendMinY(List<_TrendSeries> series) {
+  final values = [
+    for (final item in series) ...item.spots.map((spot) => spot.y),
+  ];
+  if (values.isEmpty) {
+    return 0;
+  }
+  final minimum = values.reduce(math.min);
   return math.max(0, (minimum - 2).floorToDouble());
 }
 
-double _maxY(List<double> points) {
-  final maximum = points.reduce(math.max);
+double _trendMaxY(List<_TrendSeries> series) {
+  final values = [
+    for (final item in series) ...item.spots.map((spot) => spot.y),
+  ];
+  if (values.isEmpty) {
+    return 100;
+  }
+  final maximum = values.reduce(math.max);
   return (maximum + 2).ceilToDouble();
 }
 
-double _chartInterval(List<double> points) {
-  final span = (_maxY(points) - _minY(points)).abs();
+double _trendMaxX(List<_TrendSeries> series) {
+  final values = [
+    for (final item in series) ...item.spots.map((spot) => spot.x),
+  ];
+  if (values.isEmpty) {
+    return 1;
+  }
+  return math.max(1, values.reduce(math.max));
+}
+
+double _trendInterval(List<_TrendSeries> series) {
+  final span = (_trendMaxY(series) - _trendMinY(series)).abs();
   if (span <= 8) {
     return 2;
   }
@@ -1041,4 +1689,83 @@ Color _sensorColor(SensorKind kind) {
     case SensorKind.other:
       return const Color(0xFF5D7078);
   }
+}
+
+List<SensorReading> _cpuSensors(List<SensorReading> sensors) {
+  return [
+    for (final sensor in sensors)
+      if (sensor.kind == SensorKind.cpu) sensor,
+  ];
+}
+
+List<SensorReading> _gpuSensors(List<SensorReading> sensors) {
+  return [
+    for (final sensor in sensors)
+      if (sensor.kind == SensorKind.gpu) sensor,
+  ];
+}
+
+List<SensorReading> _memorySensors(List<SensorReading> sensors) {
+  return [
+    for (final sensor in sensors)
+      if (sensor.kind == SensorKind.memory) sensor,
+  ];
+}
+
+List<SensorReading> _ambientSensors(List<SensorReading> sensors) {
+  return [
+    for (final sensor in sensors)
+      if (sensor.kind == SensorKind.ambient) sensor,
+  ];
+}
+
+List<SensorReading> _diskSensors(List<SensorReading> sensors) {
+  return [
+    for (final sensor in sensors)
+      if (_matchesCategory(sensor, const ['ssd', 'nand', 'disk'])) sensor,
+  ];
+}
+
+List<SensorReading> _powerSensors(List<SensorReading> sensors) {
+  return [
+    for (final sensor in sensors)
+      if (sensor.kind == SensorKind.other &&
+          _matchesCategory(sensor, const [
+            'power',
+            'supply',
+            'pmgr',
+            'manager',
+            'pmu',
+            'calibration',
+          ]))
+        sensor,
+  ];
+}
+
+List<SensorReading> _supportingSensors(List<SensorReading> sensors) {
+  final cpuIds = _cpuSensors(sensors).map((sensor) => sensor.id).toSet();
+  final gpuIds = _gpuSensors(sensors).map((sensor) => sensor.id).toSet();
+
+  return [
+    for (final sensor in sensors)
+      if (!cpuIds.contains(sensor.id) && !gpuIds.contains(sensor.id)) sensor,
+  ];
+}
+
+bool _matchesCategory(SensorReading sensor, List<String> keywords) {
+  final text = '${sensor.name} ${sensor.id}'.toLowerCase();
+  for (final keyword in keywords) {
+    if (text.contains(keyword)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+double? _mean(Iterable<double> values) {
+  final list = values.where((value) => value.isFinite).toList();
+  if (list.isEmpty) {
+    return null;
+  }
+  return list.reduce((a, b) => a + b) / list.length;
 }
