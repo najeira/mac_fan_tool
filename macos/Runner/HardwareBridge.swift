@@ -9,9 +9,7 @@ enum HardwareSensorBridgeSupport {
     _ systemClient: IOHIDEventSystemClient?,
     type: Int32 = kIOHIDEventTypeTemperature
   ) -> [String: Double] {
-    let sensors =
-      AppleSiliconTemperatureSensorsFromSystemClient(systemClient, type) as? [String: NSNumber]
-      ?? [:]
+    let sensors = AppleSiliconTemperatureSensorsFromSystemClient(systemClient, type) ?? [:]
     return sensors.mapValues { $0.doubleValue }
   }
 }

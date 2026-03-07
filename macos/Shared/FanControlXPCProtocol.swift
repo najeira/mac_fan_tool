@@ -4,7 +4,6 @@ struct FanControlHelperConfiguration {
   static let helperBundleSuffix = ".FanControlHelper"
   static let machServiceSuffix = ".fancontrol.helper"
   static let launchDaemonPlistName = "FanControlHelper.plist"
-  static let helperExecutableName = "FanControlHelper"
   static let helperRelativePath = "Contents/Library/LaunchServices/FanControlHelper"
 
   let appBundleIdentifier: String
