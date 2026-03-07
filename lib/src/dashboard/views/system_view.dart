@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/adaptive_panel_layout.dart';
@@ -78,8 +77,6 @@ class _FansPanel extends ConsumerWidget {
     final fanReadings = ref.watch(
       monitorSnapshotProvider.select((snapshot) => snapshot.fanReadings),
     );
-    final capabilities = ref.watch(monitorCapabilitiesProvider);
-    final activeFanCommandId = ref.watch(monitorActiveFanCommandIdProvider);
 
     return SectionPanel(
       title: 'Fans',
@@ -94,14 +91,7 @@ class _FansPanel extends ConsumerWidget {
               separator: const SizedBox(height: 16),
               children: [
                 for (final fan in fanReadings)
-                  FanControlCard(
-                    fan: fan,
-                    canControl: capabilities.fanControlEnabled,
-                    isBusy: activeFanCommandId == fan.stableId,
-                    onAutomatic: () => ref.monitorActions.setFanAutomatic(fan),
-                    onManualTargetSelected: (targetRpm) =>
-                        ref.monitorActions.setFanTargetRpm(fan, targetRpm),
-                  ),
+                  FanControlCard(fanId: fan.stableId),
               ],
             ),
     );

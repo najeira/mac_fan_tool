@@ -98,6 +98,21 @@ List<ThermalTrendSeries> _buildSeries(List<DashboardSummary> summaries) {
       color: DashboardColors.gpu,
       points: buildPoints((summary) => summary.gpuAverage),
     ),
+    ThermalTrendSeries(
+      label: 'Power',
+      color: DashboardColors.power,
+      points: buildPoints((summary) => summary.powerAverage),
+    ),
+    ThermalTrendSeries(
+      label: 'Disk',
+      color: DashboardColors.disk,
+      points: buildPoints((summary) => summary.diskAverage),
+    ),
+    ThermalTrendSeries(
+      label: 'Memory',
+      color: DashboardColors.memory,
+      points: buildPoints((summary) => summary.memoryAverage),
+    ),
   ];
 }
 

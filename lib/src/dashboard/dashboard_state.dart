@@ -103,6 +103,22 @@ final fanSummaryProvider = Provider<FanSummary?>((ref) {
   return FanSummary.fromFans(snapshot.fanReadings);
 });
 
+final fanReadingProvider = Provider.family<FanReadingData?, String>((
+  ref,
+  fanId,
+) {
+  return ref.watch(
+    monitorSnapshotProvider.select((snapshot) {
+      for (final fan in snapshot.fanReadings) {
+        if (fan.stableId == fanId) {
+          return fan;
+        }
+      }
+      return null;
+    }),
+  );
+});
+
 final thermalTrendProvider = Provider<ThermalTrendModel>((ref) {
   final history = ref.watch(monitorHistoryProvider);
   return ThermalTrendModel.fromHistory(history);

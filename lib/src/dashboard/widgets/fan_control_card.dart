@@ -1,57 +1,83 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mac_fan_tool/src/dashboard/dashboard_colors.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
-class FanControlCard extends StatefulWidget {
-  const FanControlCard({
-    super.key,
-    required this.fan,
-    required this.canControl,
-    required this.isBusy,
-    required this.onAutomatic,
-    required this.onManualTargetSelected,
-  });
+class FanControlCard extends ConsumerStatefulWidget {
+  const FanControlCard({super.key, required this.fanId});
 
-  final FanReadingData fan;
-  final bool canControl;
-  final bool isBusy;
-  final VoidCallback onAutomatic;
-  final ValueChanged<int> onManualTargetSelected;
+  final String fanId;
 
   @override
-  State<FanControlCard> createState() => _FanControlCardState();
+  ConsumerState<FanControlCard> createState() => _FanControlCardState();
 }
 
-class _FanControlCardState extends State<FanControlCard> {
+class _FanControlCardState extends ConsumerState<FanControlCard> {
   late double _targetRpm;
 
   @override
   void initState() {
     super.initState();
-    _targetRpm = _resolvedTarget(widget.fan).toDouble();
+    final fan = ref.read(fanReadingProvider(widget.fanId));
+    _targetRpm = fan == null ? 0 : _resolvedTarget(fan).toDouble();
   }
 
   @override
   void didUpdateWidget(covariant FanControlCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.fan.currentRpm != widget.fan.currentRpm ||
-        oldWidget.fan.targetRpm != widget.fan.targetRpm ||
-        oldWidget.fan.mode != widget.fan.mode) {
-      _targetRpm = _resolvedTarget(widget.fan).toDouble();
+    if (oldWidget.fanId != widget.fanId) {
+      final fan = ref.read(fanReadingProvider(widget.fanId));
+      _targetRpm = fan == null ? 0 : _resolvedTarget(fan).toDouble();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final disabled = !widget.canControl || widget.isBusy;
-    final span = math.max(
-      1,
-      widget.fan.safeMaximumRpm - widget.fan.safeMinimumRpm,
+    ref.listen<FanReadingData?>(fanReadingProvider(widget.fanId), (
+      previous,
+      next,
+    ) {
+      if (!mounted || next == null) {
+        return;
+      }
+
+      final didTelemetryChange =
+          previous == null ||
+          previous.currentRpm != next.currentRpm ||
+          previous.targetRpm != next.targetRpm ||
+          previous.mode != next.mode;
+      if (!didTelemetryChange) {
+        return;
+      }
+
+      final nextTargetRpm = _resolvedTarget(next).toDouble();
+      if (_targetRpm == nextTargetRpm) {
+        return;
+      }
+
+      setState(() {
+        _targetRpm = nextTargetRpm;
+      });
+    });
+
+    final fan = ref.watch(fanReadingProvider(widget.fanId));
+    if (fan == null) {
+      return const SizedBox.shrink();
+    }
+
+    final canControl = ref.watch(
+      monitorCapabilitiesProvider.select(
+        (capabilities) => capabilities.fanControlEnabled,
+      ),
     );
+    final isBusy = ref.watch(monitorActiveFanCommandIdProvider) == fan.stableId;
+    final disabled = !canControl || isBusy;
+    final span = math.max(1, fan.safeMaximumRpm - fan.safeMinimumRpm);
     final divisions = math.max(1, span ~/ 100);
 
     return Container(
@@ -71,14 +97,14 @@ class _FanControlCardState extends State<FanControlCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.fan.displayName,
+                      fan.displayName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${widget.fan.safeCurrentRpm} RPM now • ${widget.fan.safeMinimumRpm}-${widget.fan.safeMaximumRpm} RPM range',
+                      '${fan.safeCurrentRpm} RPM now • ${fan.safeMinimumRpm}-${fan.safeMaximumRpm} RPM range',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: DashboardColors.textMuted,
                       ),
@@ -86,17 +112,17 @@ class _FanControlCardState extends State<FanControlCard> {
                   ],
                 ),
               ),
-              _ModeBadge(mode: widget.fan.normalizedMode),
+              _ModeBadge(mode: fan.normalizedMode),
             ],
           ),
           const SizedBox(height: 18),
           Slider(
             value: _targetRpm.clamp(
-              widget.fan.safeMinimumRpm.toDouble(),
-              widget.fan.safeMaximumRpm.toDouble(),
+              fan.safeMinimumRpm.toDouble(),
+              fan.safeMaximumRpm.toDouble(),
             ),
-            min: widget.fan.safeMinimumRpm.toDouble(),
-            max: widget.fan.safeMaximumRpm.toDouble(),
+            min: fan.safeMinimumRpm.toDouble(),
+            max: fan.safeMaximumRpm.toDouble(),
             divisions: divisions,
             label: '${_targetRpm.round()} RPM',
             onChanged: disabled
@@ -111,23 +137,26 @@ class _FanControlCardState extends State<FanControlCard> {
             children: [
               Text(
                 'Target ${_targetRpm.round()} RPM',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: DashboardColors.textTarget,
                 ),
               ),
               const Spacer(),
               OutlinedButton(
-                onPressed: disabled ? null : widget.onAutomatic,
+                onPressed: disabled
+                    ? null
+                    : () => ref.monitorActions.setFanAutomatic(fan),
                 child: const Text('Automatic'),
               ),
               const SizedBox(width: 10),
               FilledButton(
                 onPressed: disabled
                     ? null
-                    : () => widget.onManualTargetSelected(_targetRpm.round()),
-                child: Text(widget.isBusy ? 'Applying...' : 'Apply Manual RPM'),
+                    : () => ref.monitorActions.setFanTargetRpm(
+                        fan,
+                        _targetRpm.round(),
+                      ),
+                child: Text(isBusy ? 'Applying...' : 'Apply Manual RPM'),
               ),
             ],
           ),

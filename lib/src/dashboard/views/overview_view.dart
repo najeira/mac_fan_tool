@@ -80,7 +80,7 @@ class _ThermalTrendPanel extends ConsumerWidget {
     return SectionPanel(
       title: 'Thermal Trend',
       subtitle:
-          'Composite, CPU average, and GPU average over the recent polling window.',
+          'Composite, CPU, GPU, Power, Disk, and Memory averages over the recent polling window.',
       child: trend.isEmpty
           ? const EmptyPanel(
               icon: Icons.show_chart,
