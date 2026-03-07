@@ -66,19 +66,30 @@ String formatSampleTime(DateTime capturedAt) {
 
 String formatFanSummary(FanSummary? summary) {
   if (summary == null) {
-    return 'Fan - ';
+    return ' - ';
   }
   if (summary.fanCount == 1) {
-    return 'Fan ${summary.averageRpm} rpm';
+    return '${summary.averageRpm} rpm';
   }
-  return '${summary.fanCount} fans avg ${summary.averageRpm} RPM';
+  return '${summary.averageRpm} RPM AVG ${summary.fanCount}';
 }
 
 Color fanSummaryChipColor(FanSummary? summary) {
-  if (summary?.manualCount == 0) {
+  final normalizedSpeed = summary?.normalizedSpeed;
+  if (normalizedSpeed == null) {
+    return const Color(0xFF4B5D66);
+  }
+
+  if (normalizedSpeed < 0.35) {
     return const Color(0xFF2E6B5F);
   }
-  return const Color(0xFF7A5134);
+  if (normalizedSpeed < 0.65) {
+    return const Color(0xFF866225);
+  }
+  if (normalizedSpeed < 0.85) {
+    return const Color(0xFF9B5B26);
+  }
+  return const Color(0xFF8F3F3D);
 }
 
 Color sensorColor(SensorKindData? kind) {

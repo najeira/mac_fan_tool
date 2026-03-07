@@ -93,17 +93,23 @@ class FanSummary {
   const FanSummary({
     required this.fanCount,
     required this.averageRpm,
+    required this.averageMinimumRpm,
+    required this.averageMaximumRpm,
     required this.peakRpm,
     required this.manualCount,
   });
 
   factory FanSummary.fromFans(List<FanReadingData> fans) {
     var totalRpm = 0;
+    var totalMinimumRpm = 0;
+    var totalMaximumRpm = 0;
     var peakRpm = 0;
     var manualCount = 0;
 
     for (final fan in fans) {
       totalRpm += fan.safeCurrentRpm;
+      totalMinimumRpm += fan.safeMinimumRpm;
+      totalMaximumRpm += fan.safeMaximumRpm;
       if (fan.safeCurrentRpm > peakRpm) {
         peakRpm = fan.safeCurrentRpm;
       }
@@ -115,6 +121,8 @@ class FanSummary {
     return FanSummary(
       fanCount: fans.length,
       averageRpm: (totalRpm / fans.length).round(),
+      averageMinimumRpm: (totalMinimumRpm / fans.length).round(),
+      averageMaximumRpm: (totalMaximumRpm / fans.length).round(),
       peakRpm: peakRpm,
       manualCount: manualCount,
     );
@@ -122,6 +130,17 @@ class FanSummary {
 
   final int fanCount;
   final int averageRpm;
+  final int averageMinimumRpm;
+  final int averageMaximumRpm;
   final int peakRpm;
   final int manualCount;
+
+  double? get normalizedSpeed {
+    final span = averageMaximumRpm - averageMinimumRpm;
+    if (span <= 0) {
+      return null;
+    }
+
+    return ((averageRpm - averageMinimumRpm) / span).clamp(0.0, 1.0);
+  }
 }
