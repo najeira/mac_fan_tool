@@ -22,7 +22,7 @@
 
 /* Begin PBXBuildFile section */
 		0A7C990F2DCA1001004A1120 /* HardwareBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */; };
-		0A7C99102DCA1001004A1120 /* Pigeon/HardwareApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C990E2DCA1001004A1120 /* Pigeon/HardwareApi.g.swift */; };
+		0A7C99102DCA1001004A1120 /* HardwareApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */; };
 		0A7C99122DDA1001004A1120 /* HardwareSensorBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */; };
 		0AB100012DCE1001004A1120 /* FanControlHelperClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100112DCE1001004A1120 /* FanControlHelperClient.swift */; };
 		0AB100022DCE1001004A1120 /* FanControlXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100122DCE1001004A1120 /* FanControlXPCProtocol.swift */; };
@@ -79,7 +79,7 @@
 
 /* Begin PBXFileReference section */
 		0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareBridge.swift; sourceTree = "<group>"; };
-		0A7C990E2DCA1001004A1120 /* Pigeon/HardwareApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pigeon/HardwareApi.g.swift; sourceTree = "<group>"; };
+		0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pigeon/HardwareApi.g.swift; sourceTree = "<group>"; };
 		0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HardwareSensorBridge.m; sourceTree = "<group>"; };
 		0AB100112DCE1001004A1120 /* FanControlHelperClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanControlHelperClient.swift; sourceTree = "<group>"; };
 		0AB100122DCE1001004A1120 /* FanControlXPCProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanControlXPCProtocol.swift; sourceTree = "<group>"; };
@@ -241,7 +241,7 @@
 				0AB100112DCE1001004A1120 /* FanControlHelperClient.swift */,
 				0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */,
 				0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */,
-				0A7C990E2DCA1001004A1120 /* Pigeon/HardwareApi.g.swift */,
+				0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -531,13 +531,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -572,7 +568,7 @@
 			files = (
 				0AB100022DCE1001004A1120 /* FanControlXPCProtocol.swift in Sources */,
 				0AB100012DCE1001004A1120 /* FanControlHelperClient.swift in Sources */,
-				0A7C99102DCA1001004A1120 /* Pigeon/HardwareApi.g.swift in Sources */,
+				0A7C99102DCA1001004A1120 /* HardwareApi.g.swift in Sources */,
 				0A7C99122DDA1001004A1120 /* HardwareSensorBridge.m in Sources */,
 				0A7C990F2DCA1001004A1120 /* HardwareBridge.swift in Sources */,
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,

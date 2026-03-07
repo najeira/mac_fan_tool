@@ -46,3 +46,5 @@ app.*.map.json
 
 # Local macOS signing overrides
 macos/Runner/Configs/Signing.xcconfig
+.env
+MacFanTool.zip
