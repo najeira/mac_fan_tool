@@ -67,7 +67,7 @@ class MonitorController extends Notifier<MonitorState> {
     }
 
     _refreshInFlight = true;
-    state = state.copyWith(isRefreshing: showSpinner, errorMessage: null);
+    state = state.copyWith(isRefreshing: showSpinner);
 
     try {
       final snapshot = await _repository.loadSnapshot();
@@ -75,6 +75,7 @@ class MonitorController extends Notifier<MonitorState> {
         snapshot: snapshot,
         history: _appendHistory(snapshot),
         isRefreshing: false,
+        errorMessage: null,
       );
     } catch (error) {
       state = state.copyWith(
@@ -137,17 +138,23 @@ class MonitorController extends Notifier<MonitorState> {
     required String successMessage,
   }) async {
     _clearTransientNotice();
-    state = state.copyWith(activeFanCommandId: fanId, errorMessage: null);
+    state = state.copyWith(
+      activeFanCommandIds: {...state.activeFanCommandIds, fanId},
+    );
 
     try {
       await action();
-      state = state.copyWith(activeFanCommandId: null);
+      state = state.copyWith(
+        activeFanCommandIds: _removeActiveFanCommandId(fanId),
+      );
       _showTransientNotice(
         MonitorNotice(tone: MonitorNoticeTone.success, message: successMessage),
       );
       await refresh(showSpinner: false);
     } catch (error) {
-      state = state.copyWith(activeFanCommandId: null);
+      state = state.copyWith(
+        activeFanCommandIds: _removeActiveFanCommandId(fanId),
+      );
       _showTransientNotice(
         MonitorNotice(
           tone: MonitorNoticeTone.error,
@@ -184,5 +191,11 @@ class MonitorController extends Notifier<MonitorState> {
     }
 
     return nextHistory.sublist(nextHistory.length - 90);
+  }
+
+  Set<String> _removeActiveFanCommandId(String fanId) {
+    final activeFanCommandIds = {...state.activeFanCommandIds};
+    activeFanCommandIds.remove(fanId);
+    return activeFanCommandIds;
   }
 }
