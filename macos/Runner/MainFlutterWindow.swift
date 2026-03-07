@@ -18,4 +18,12 @@ class MainFlutterWindow: NSWindow {
 
     super.awakeFromNib()
   }
+
+  override func performClose(_ sender: Any?) {
+    if AppDelegate.shared?.interceptMainWindowClose(self) == true {
+      return
+    }
+
+    super.performClose(sender)
+  }
 }
