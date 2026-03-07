@@ -40,6 +40,7 @@ class SectionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
@@ -60,14 +61,14 @@ class SectionPanel extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            style: theme.textTheme.bodyMedium?.copyWith(
               color: DashboardColors.textSecondary,
             ),
           ),
@@ -326,6 +327,7 @@ class SensorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
       children: [
         Container(
@@ -343,14 +345,14 @@ class SensorRow extends StatelessWidget {
             children: [
               Text(
                 sensor.displayName,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 sensor.stableId,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.bodySmall?.copyWith(
                   color: DashboardColors.textSubtle,
                 ),
               ),
@@ -359,9 +361,9 @@ class SensorRow extends StatelessWidget {
         ),
         Text(
           '${sensor.numericValue.toStringAsFixed(1)} ${sensor.displayUnit}',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
@@ -376,14 +378,15 @@ class KeyValueRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
       children: [
         Expanded(
           child: Text(
             label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: DashboardColors.textKey),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: DashboardColors.textKey,
+            ),
           ),
         ),
         const SizedBox(width: 18),
@@ -391,9 +394,9 @@ class KeyValueRow extends StatelessWidget {
           child: Text(
             value,
             textAlign: TextAlign.end,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],

@@ -92,6 +92,7 @@ class _LoadingStepRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final accent = isComplete
         ? DashboardColors.successStrong
         : DashboardColors.warningStrong;
@@ -114,7 +115,7 @@ class _LoadingStepRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              style: theme.textTheme.bodyLarge?.copyWith(
                 color: DashboardColors.textStrong,
                 fontWeight: FontWeight.w600,
               ),
@@ -122,7 +123,7 @@ class _LoadingStepRow extends StatelessWidget {
           ),
           Text(
             value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            style: theme.textTheme.bodyMedium?.copyWith(
               color: accent,
               fontWeight: FontWeight.w700,
             ),

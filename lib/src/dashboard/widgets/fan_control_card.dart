@@ -38,6 +38,7 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     ref.listen<FanReadingData?>(fanReadingProvider(widget.fanId), (
       previous,
       next,
@@ -98,14 +99,14 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
                   children: [
                     Text(
                       fan.displayName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '${fan.safeCurrentRpm} RPM now • ${fan.safeMinimumRpm}-${fan.safeMaximumRpm} RPM range',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: DashboardColors.textMuted,
                       ),
                     ),
@@ -137,7 +138,7 @@ class _FanControlCardState extends ConsumerState<FanControlCard> {
             children: [
               Text(
                 'Target ${_targetRpm.round()} RPM',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.bodySmall?.copyWith(
                   color: DashboardColors.textTarget,
                 ),
               ),
@@ -177,6 +178,7 @@ class _ModeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isManual = mode == FanModeData.manual;
     final color = isManual
         ? DashboardColors.fanManual
@@ -190,7 +192,7 @@ class _ModeBadge extends StatelessWidget {
       ),
       child: Text(
         isManual ? 'Manual' : 'Automatic',
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        style: theme.textTheme.labelLarge?.copyWith(
           color: color,
           fontWeight: FontWeight.w700,
         ),
