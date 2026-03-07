@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
@@ -27,24 +28,44 @@ final monitorCapabilitiesProvider = Provider<HardwareCapabilitiesData>((ref) {
 });
 
 final monitorIsRefreshingProvider = Provider<bool>((ref) {
+  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  if (debugOverrides.showRefreshing) {
+    return true;
+  }
+
   return ref.watch(
     monitorControllerProvider.select((state) => state.isRefreshing),
   );
 });
 
 final monitorIsBootstrappingProvider = Provider<bool>((ref) {
+  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  if (debugOverrides.showBootstrapping) {
+    return true;
+  }
+
   return ref.watch(
     monitorControllerProvider.select((state) => state.isBootstrapping),
   );
 });
 
 final monitorErrorMessageProvider = Provider<String?>((ref) {
+  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  if (debugOverrides.showError) {
+    return 'Debug override: native bridge reported an injected error state.';
+  }
+
   return ref.watch(
     monitorControllerProvider.select((state) => state.errorMessage),
   );
 });
 
 final monitorLastCommandMessageProvider = Provider<String?>((ref) {
+  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  if (debugOverrides.showSuccess) {
+    return 'Debug override: fan command completed successfully.';
+  }
+
   return ref.watch(
     monitorControllerProvider.select((state) => state.lastCommandMessage),
   );
@@ -62,6 +83,11 @@ final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
 });
 
 final dashboardHardwareNoteProvider = Provider<String?>((ref) {
+  final debugOverrides = ref.watch(dashboardAppliedDebugOverridesProvider);
+  if (debugOverrides.showHardwareNote) {
+    return 'Debug override: showing a simulated hardware note for layout testing.';
+  }
+
   final notes = ref.watch(
     monitorControllerProvider.select(
       (state) => (
