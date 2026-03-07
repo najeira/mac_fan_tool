@@ -62,8 +62,8 @@ class _DashboardLayout extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(28, 44, 28, 36),
         children: [
           // const DebugPanel(),
-          const _DashboardTransientNoticeSection(),
-          const _DashboardPersistentStatusSection(),
+          const _TransientNoticeSection(),
+          const _PersistentStatusSection(),
           const SizedBox(height: 18),
           if (showLoadingPanel) ...const [LoadingPanel()] else ...const [
             HeroPanel(),
@@ -94,8 +94,8 @@ class _DashboardBody extends ConsumerWidget {
   }
 }
 
-class _DashboardTransientNoticeSection extends ConsumerWidget {
-  const _DashboardTransientNoticeSection();
+class _TransientNoticeSection extends ConsumerWidget {
+  const _TransientNoticeSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -118,8 +118,8 @@ class _DashboardTransientNoticeSection extends ConsumerWidget {
   }
 }
 
-class _DashboardPersistentStatusSection extends ConsumerWidget {
-  const _DashboardPersistentStatusSection();
+class _PersistentStatusSection extends ConsumerWidget {
+  const _PersistentStatusSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
