@@ -28,7 +28,6 @@ private enum SMCDataType: String {
 private enum SMCCommand: UInt8 {
   case kernelIndex = 2
   case readBytes = 5
-  case readIndex = 8
   case readKeyInfo = 9
 }
 
@@ -473,6 +472,11 @@ private enum SMCConnectionError: Error {
 }
 
 private final class AppleSiliconHardwareMonitor {
+  private enum CpuThermalStrategy {
+    case smcOnly
+    case preferPmuTdieThenSmcFallback
+  }
+
   private let chipBrand: String
   private let chipModel: AppleSiliconModel
   private let smc: AppleSMCConnection?
@@ -574,18 +578,12 @@ private final class AppleSiliconHardwareMonitor {
       return []
     }
 
+    let hidValues = hidTemperatureValues()
     var readings: [SensorReadingData] = []
-
-    if chipModel == .m4Pro {
-      readings.append(contentsOf: readM4ProCpuThermals())
-      readings.append(contentsOf: readKnownSmcSensors(Self.m4ProGpuSensors))
-      readings.append(contentsOf: readKnownSmcSensors(Self.m4ProSupplementalSensors))
-      readings.append(contentsOf: readKnownHidSensors(promotePmuTdieToCpu: false))
-    } else {
-      readings.append(contentsOf: readKnownSmcSensors(sensorCatalog))
-      readings.append(contentsOf: readKnownHidSensors(promotePmuTdieToCpu: false))
-    }
-
+    readings.append(contentsOf: readCpuThermals(from: hidValues))
+    readings.append(contentsOf: readKnownSmcSensors(gpuSensorCatalog))
+    readings.append(contentsOf: readKnownSmcSensors(supplementalSmcSensorCatalog))
+    readings.append(contentsOf: readSupplementalHidSensors(from: hidValues))
     return deduplicated(readings)
   }
 
@@ -620,9 +618,21 @@ private final class AppleSiliconHardwareMonitor {
     return readings
   }
 
-  private func readM4ProCpuThermals() -> [SensorReadingData] {
-    let hidValues = hidTemperatureValues()
-    let cpuSensors = hidValues
+  private func readCpuThermals(from hidValues: [String: Double]) -> [SensorReadingData] {
+    switch cpuThermalStrategy {
+    case .smcOnly:
+      return readKnownSmcSensors(cpuFallbackSmcSensorCatalog)
+    case .preferPmuTdieThenSmcFallback:
+      let cpuSensors = readPmuTdieCpuThermals(from: hidValues)
+      if !cpuSensors.isEmpty {
+        return cpuSensors
+      }
+      return readKnownSmcSensors(cpuFallbackSmcSensorCatalog)
+    }
+  }
+
+  private func readPmuTdieCpuThermals(from hidValues: [String: Double]) -> [SensorReadingData] {
+    hidValues
       .filter { $0.key.hasPrefix("PMU tdie") }
       .compactMap { key, value -> SensorReadingData? in
         guard isReasonableTemperature(value),
@@ -639,19 +649,11 @@ private final class AppleSiliconHardwareMonitor {
         )
       }
       .sorted { ($0.id ?? "") < ($1.id ?? "") }
-
-    if !cpuSensors.isEmpty {
-      return cpuSensors
-    }
-
-    return readKnownSmcSensors(Self.m4CpuFallbackSensors)
   }
 
-  private func readKnownHidSensors(promotePmuTdieToCpu: Bool) -> [SensorReadingData] {
-    let temperatures = hidTemperatureValues()
-
-    return temperatures.compactMap { key, value in
-      sensorFromHid(key: key, value: value, promotePmuTdieToCpu: promotePmuTdieToCpu)
+  private func readSupplementalHidSensors(from hidValues: [String: Double]) -> [SensorReadingData] {
+    hidValues.compactMap { key, value in
+      supplementalHidSensor(key: key, value: value)
     }
   }
 
@@ -665,23 +667,9 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
-  private func sensorFromHid(
-    key: String,
-    value: Double,
-    promotePmuTdieToCpu: Bool
-  ) -> SensorReadingData? {
+  private func supplementalHidSensor(key: String, value: Double) -> SensorReadingData? {
     guard isReasonableTemperature(value) else {
       return nil
-    }
-
-    if promotePmuTdieToCpu, key.hasPrefix("PMU tdie"), let index = trailingInteger(in: key) {
-      return SensorReadingData(
-        id: "hid-\(key)",
-        name: "CPU thermal \(index)",
-        unit: "C",
-        value: value,
-        kind: .cpu
-      )
     }
 
     if key.hasPrefix("GPU MTR Temp Sensor"), let index = trailingInteger(in: key) {
@@ -874,18 +862,65 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
-  private var sensorCatalog: [SensorDescriptor] {
+  private var cpuThermalStrategy: CpuThermalStrategy {
+    switch chipModel {
+    case .m4Pro:
+      return .preferPmuTdieThenSmcFallback
+    default:
+      return .smcOnly
+    }
+  }
+
+  private var cpuFallbackSmcSensorCatalog: [SensorDescriptor] {
+    switch chipModel {
+    case .m4Pro:
+      return Self.m4CpuFallbackSensors
+    default:
+      return generationSmcSensorCatalog.filter { $0.kind == .cpu }
+    }
+  }
+
+  private var gpuSensorCatalog: [SensorDescriptor] {
+    switch chipModel {
+    case .m4Pro:
+      return Self.m4ProGpuSensors
+    default:
+      return generationSmcSensorCatalog.filter { $0.kind == .gpu }
+    }
+  }
+
+  private var supplementalSmcSensorCatalog: [SensorDescriptor] {
+    generationSmcSensorCatalog.filter { $0.kind != .cpu && $0.kind != .gpu } +
+      Self.appleSiliconCommonSensors +
+      modelSpecificSupplementalSmcSensors
+  }
+
+  private var generationSmcSensorCatalog: [SensorDescriptor] {
     switch chipModel.generation {
     case .m1:
-      return Self.m1Sensors + Self.appleSiliconCommonSensors
+      return Self.m1Sensors
     case .m2:
-      return Self.m2Sensors + Self.appleSiliconCommonSensors
+      return Self.m2Sensors
     case .m3:
-      return Self.m3Sensors + Self.appleSiliconCommonSensors
+      return Self.m3Sensors
     case .m4:
-      return Self.m4Sensors + Self.appleSiliconCommonSensors + Self.m4SupplementalSensors
+      return Self.m4Sensors
     case .unknown:
-      return Self.appleSiliconCommonSensors
+      return []
+    }
+  }
+
+  private var modelSpecificSupplementalSmcSensors: [SensorDescriptor] {
+    switch chipModel {
+    case .m4Pro:
+      return Self.m4ProSupplementalSensors
+    default:
+      switch chipModel.generation {
+      case .m4:
+        return Self.m4SupplementalSensors
+      case .m1, .m2, .m3, .unknown:
+        return []
+      }
     }
   }
 
