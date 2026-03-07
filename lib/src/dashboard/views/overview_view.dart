@@ -9,87 +9,79 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
-import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class OverviewView extends ConsumerWidget {
   const OverviewView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isWide = ref.watch(isWideProvider);
-    final history = ref.watch(monitorHistoryProvider);
     final summary = ref.watch(summaryProvider);
-
-    final cards = [
-      MetricCard(
-        label: 'CPU',
-        value: formatTemperature(summary.cpuAverage),
-        caption: compactSensorCountLabel(summary.cpuSensorCount),
-        accentColor: DashboardColors.cpu,
-      ),
-      MetricCard(
-        label: 'GPU',
-        value: formatTemperature(summary.gpuAverage),
-        caption: compactSensorCountLabel(summary.gpuSensorCount),
-        accentColor: DashboardColors.gpu,
-      ),
-      MetricCard(
-        label: 'Power',
-        value: formatTemperature(summary.powerAverage),
-        caption: compactSensorCountLabel(summary.powerSensorCount),
-        accentColor: DashboardColors.power,
-      ),
-      MetricCard(
-        label: 'Disk',
-        value: formatTemperature(summary.diskAverage),
-        caption: compactSensorCountLabel(summary.diskSensorCount),
-        accentColor: DashboardColors.disk,
-      ),
-      MetricCard(
-        label: 'Memory',
-        value: formatTemperature(summary.memoryAverage),
-        caption: compactSensorCountLabel(summary.memorySensorCount),
-        accentColor: DashboardColors.memory,
-      ),
-    ];
-
-    final trendPanel = _ThermalTrendPanel(history: history);
-    final breakdownPanel = _CategoryBreakdownPanel(summary: summary);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(spacing: 16, runSpacing: 16, children: cards),
+        Row(
+          spacing: 16,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: MetricCard(
+                label: 'CPU',
+                value: formatTemperature(summary.cpuAverage),
+                caption: compactSensorCountLabel(summary.cpuSensorCount),
+                accentColor: DashboardColors.cpu,
+              ),
+            ),
+            Expanded(
+              child: MetricCard(
+                label: 'GPU',
+                value: formatTemperature(summary.gpuAverage),
+                caption: compactSensorCountLabel(summary.gpuSensorCount),
+                accentColor: DashboardColors.gpu,
+              ),
+            ),
+            Expanded(
+              child: MetricCard(
+                label: 'Power',
+                value: formatTemperature(summary.powerAverage),
+                caption: compactSensorCountLabel(summary.powerSensorCount),
+                accentColor: DashboardColors.power,
+              ),
+            ),
+            Expanded(
+              child: MetricCard(
+                label: 'Disk',
+                value: formatTemperature(summary.diskAverage),
+                caption: compactSensorCountLabel(summary.diskSensorCount),
+                accentColor: DashboardColors.disk,
+              ),
+            ),
+            Expanded(
+              child: MetricCard(
+                label: 'Memory',
+                value: formatTemperature(summary.memoryAverage),
+                caption: compactSensorCountLabel(summary.memorySensorCount),
+                accentColor: DashboardColors.memory,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 24),
-        if (isWide)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: trendPanel),
-              const SizedBox(width: 20),
-              Expanded(child: breakdownPanel),
-            ],
-          )
-        else ...[
-          trendPanel,
-          const SizedBox(height: 20),
-          breakdownPanel,
-        ],
+        const _ThermalTrendPanel(),
       ],
     );
   }
 }
 
-class _ThermalTrendPanel extends StatelessWidget {
-  const _ThermalTrendPanel({required this.history});
-
-  final List<HardwareSnapshotData> history;
+class _ThermalTrendPanel extends ConsumerWidget {
+  const _ThermalTrendPanel({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final summaries = [
-      for (final snapshot in history) DashboardSummary.fromSnapshot(snapshot),
-    ];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(monitorHistoryProvider);
+
+    final summaries = history
+        .map((snapshot) => DashboardSummary.fromSnapshot(snapshot))
+        .toList();
     final series = _buildTrendSeries(summaries);
 
     return SectionPanel(
@@ -186,141 +178,6 @@ class _ThermalTrendPanel extends StatelessWidget {
   }
 }
 
-class _CategoryBreakdownPanel extends StatelessWidget {
-  const _CategoryBreakdownPanel({required this.summary});
-
-  final DashboardSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final categories = [
-      _SummaryCategory(
-        label: 'CPU',
-        value: summary.cpuAverage,
-        count: summary.cpuSensorCount,
-        color: sensorColor(SensorKindData.cpu),
-      ),
-      _SummaryCategory(
-        label: 'GPU',
-        value: summary.gpuAverage,
-        count: summary.gpuSensorCount,
-        color: sensorColor(SensorKindData.gpu),
-      ),
-      _SummaryCategory(
-        label: 'Power',
-        value: summary.powerAverage,
-        count: summary.powerSensorCount,
-        color: DashboardColors.power,
-      ),
-      _SummaryCategory(
-        label: 'Disk',
-        value: summary.diskAverage,
-        count: summary.diskSensorCount,
-        color: DashboardColors.disk,
-      ),
-      _SummaryCategory(
-        label: 'Memory',
-        value: summary.memoryAverage,
-        count: summary.memorySensorCount,
-        color: sensorColor(SensorKindData.memory),
-      ),
-      _SummaryCategory(
-        label: 'Ambient',
-        value: summary.ambientAverage,
-        count: summary.ambientSensorCount,
-        color: sensorColor(SensorKindData.ambient),
-      ),
-    ];
-
-    final maxValue = categories
-        .map((category) => category.value ?? 0)
-        .fold<double>(0, math.max);
-
-    return SectionPanel(
-      title: 'Category Snapshot',
-      subtitle:
-          'Balanced averages by thermal domain so one large sensor family does not dominate the overview.',
-      child: Column(
-        children: [
-          for (final category in categories) ...[
-            _CategoryBarRow(
-              category: category,
-              maxValue: maxValue <= 0 ? 1 : maxValue,
-            ),
-            if (category != categories.last) const SizedBox(height: 16),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryBarRow extends StatelessWidget {
-  const _CategoryBarRow({required this.category, required this.maxValue});
-
-  final _SummaryCategory category;
-  final double maxValue;
-
-  @override
-  Widget build(BuildContext context) {
-    final ratio = category.value == null ? 0.0 : category.value! / maxValue;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 92,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                category.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                category.count <= 0
-                    ? 'No sensors'
-                    : '${category.count} sensors',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(
-                  color: DashboardColors.textSensorCount,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: ratio.clamp(0, 1),
-              minHeight: 12,
-              backgroundColor: DashboardColors.progressTrack,
-              color: category.color,
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 92,
-          child: Text(
-            formatTemperature(category.value),
-            textAlign: TextAlign.end,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _TrendSeries {
   const _TrendSeries({
     required this.label,
@@ -333,20 +190,6 @@ class _TrendSeries {
   final Color color;
   final List<FlSpot> spots;
   final Color? fillColor;
-}
-
-class _SummaryCategory {
-  const _SummaryCategory({
-    required this.label,
-    required this.value,
-    required this.count,
-    required this.color,
-  });
-
-  final String label;
-  final double? value;
-  final int count;
-  final Color color;
 }
 
 List<_TrendSeries> _buildTrendSeries(List<DashboardSummary> summaries) {

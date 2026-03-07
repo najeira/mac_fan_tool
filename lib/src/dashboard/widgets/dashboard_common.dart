@@ -6,6 +6,26 @@ import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 enum NoticeTone { info, success, error }
 
+class ColorDot extends StatelessWidget {
+  const ColorDot({super.key, required this.color, this.size = 6});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(size / 2),
+        ),
+      ),
+    );
+  }
+}
+
 class SectionPanel extends StatelessWidget {
   const SectionPanel({
     super.key,
@@ -79,7 +99,6 @@ class MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Container(
-      width: 220,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: DashboardColors.metricSurface,
@@ -96,14 +115,7 @@ class MetricCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: accentColor,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
+                    ColorDot(color: accentColor),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
@@ -161,14 +173,7 @@ class LegendChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
+          ColorDot(color: color, size: 10),
           const SizedBox(width: 8),
           Text(
             label,

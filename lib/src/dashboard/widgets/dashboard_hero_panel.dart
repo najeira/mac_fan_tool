@@ -14,13 +14,13 @@ class HeroPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
 
     final snapshot = ref.watch(monitorSnapshotProvider);
     final summary = ref.watch(summaryProvider);
     final fanSummary = ref.watch(fanSummaryProvider);
     final isRefreshing = ref.watch(monitorIsRefreshingProvider);
+
     final refreshButtonStyle = FilledButton.styleFrom(
       minimumSize: const Size(0, 54),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -28,7 +28,7 @@ class HeroPanel extends ConsumerWidget {
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+      textStyle: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
       backgroundColor: DashboardColors.heroControlSelected,
       disabledBackgroundColor: DashboardColors.heroControlIdle,
       foregroundColor: DashboardColors.heroControlForeground,
@@ -79,13 +79,13 @@ class HeroPanel extends ConsumerWidget {
                 icon: Icons.device_thermostat,
                 label: formatTemperature(summary.overallTemperature),
                 color: thermalChipColor(snapshot.thermalLevel),
-                foreground: colorScheme.onPrimary,
+                foreground: theme.colorScheme.onPrimary,
               ),
               PillChip(
                 icon: Icons.wind_power,
                 label: formatFanSummary(fanSummary),
                 color: fanSummaryChipColor(fanSummary),
-                foreground: colorScheme.onPrimary,
+                foreground: theme.colorScheme.onPrimary,
               ),
             ],
           ),
