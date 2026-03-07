@@ -27,11 +27,7 @@ class _CpuSensorPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sensors = ref.watch(
-      monitorSnapshotProvider.select(
-        (snapshot) => cpuSensors(snapshot.sensorReadings),
-      ),
-    );
+    final sensors = ref.watch(cpuSensorReadingsProvider).items;
     final cpuAverage = ref.watch(
       summaryProvider.select((summary) => summary.cpuAverage),
     );
@@ -53,11 +49,7 @@ class _GpuSensorPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sensors = ref.watch(
-      monitorSnapshotProvider.select(
-        (snapshot) => gpuSensors(snapshot.sensorReadings),
-      ),
-    );
+    final sensors = ref.watch(gpuSensorReadingsProvider).items;
     final gpuAverage = ref.watch(
       summaryProvider.select((summary) => summary.gpuAverage),
     );
@@ -79,11 +71,7 @@ class _SupportingSensorPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sensors = ref.watch(
-      monitorSnapshotProvider.select(
-        (snapshot) => supportingSensors(snapshot.sensorReadings),
-      ),
-    );
+    final sensors = ref.watch(supportingSensorReadingsProvider).items;
 
     return _SensorGroupPanel(
       title: 'Supporting Thermals',

@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
+import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/dashboard/thermal_trend.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
@@ -17,6 +19,19 @@ final monitorSnapshotProvider = Provider<HardwareSnapshotData>((ref) {
 
 final monitorHistoryProvider = Provider<List<HardwareSnapshotData>>((ref) {
   return ref.watch(monitorControllerProvider.select((state) => state.history));
+});
+
+final monitorSensorReadingsProvider =
+    Provider<ComparableList<SensorReadingData>>((ref) {
+      final snapshot = ref.watch(monitorSnapshotProvider);
+      return ComparableList(snapshot.sensorReadings);
+    });
+
+final monitorFanReadingsProvider = Provider<ComparableList<FanReadingData>>((
+  ref,
+) {
+  final snapshot = ref.watch(monitorSnapshotProvider);
+  return ComparableList(snapshot.fanReadings);
 });
 
 final monitorDeviceProvider = Provider<DeviceMetadata>((ref) {
@@ -110,29 +125,46 @@ final summaryProvider = Provider<DashboardSummary>((ref) {
 });
 
 final fanSummaryProvider = Provider<FanSummary?>((ref) {
-  final snapshot = ref.watch(monitorSnapshotProvider);
-  if (snapshot.fanReadings.isEmpty) {
+  final fanReadings = ref.watch(monitorFanReadingsProvider).items;
+  if (fanReadings.isEmpty) {
     return null;
   }
 
-  return FanSummary.fromFans(snapshot.fanReadings);
+  return FanSummary.fromFans(fanReadings);
 });
 
 final fanReadingProvider = Provider.family<FanReadingData?, String>((
   ref,
   fanId,
 ) {
-  return ref.watch(
-    monitorSnapshotProvider.select((snapshot) {
-      for (final fan in snapshot.fanReadings) {
-        if (fan.stableId == fanId) {
-          return fan;
-        }
-      }
-      return null;
-    }),
-  );
+  final fanReadings = ref.watch(monitorFanReadingsProvider).items;
+  for (final fan in fanReadings) {
+    if (fan.stableId == fanId) {
+      return fan;
+    }
+  }
+  return null;
 });
+
+final cpuSensorReadingsProvider = Provider<ComparableList<SensorReadingData>>((
+  ref,
+) {
+  final sensorReadings = ref.watch(monitorSensorReadingsProvider).items;
+  return ComparableList(cpuSensors(sensorReadings));
+});
+
+final gpuSensorReadingsProvider = Provider<ComparableList<SensorReadingData>>((
+  ref,
+) {
+  final sensorReadings = ref.watch(monitorSensorReadingsProvider).items;
+  return ComparableList(gpuSensors(sensorReadings));
+});
+
+final supportingSensorReadingsProvider =
+    Provider<ComparableList<SensorReadingData>>((ref) {
+      final sensorReadings = ref.watch(monitorSensorReadingsProvider).items;
+      return ComparableList(supportingSensors(sensorReadings));
+    });
 
 final thermalTrendProvider = Provider<ThermalTrendModel>((ref) {
   final history = ref.watch(monitorHistoryProvider);
@@ -169,3 +201,24 @@ final persistentStatusBannersProvider = Provider<List<(NoticeTone, String)>>((
     if (hardwareNote != null) (NoticeTone.info, hardwareNote),
   ];
 });
+
+class ComparableList<T> {
+  ComparableList(Iterable<T> items) : items = List<T>.unmodifiable(items);
+
+  final List<T> items;
+
+  bool get isEmpty => items.isEmpty;
+
+  int get length => items.length;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is ComparableList<T> &&
+            other.runtimeType == runtimeType &&
+            listEquals(items, other.items);
+  }
+
+  @override
+  int get hashCode => Object.hashAll(items);
+}

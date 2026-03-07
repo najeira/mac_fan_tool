@@ -148,8 +148,8 @@ HardwareSnapshotData _sampleSnapshot() {
   return HardwareSnapshotData(
     capturedAtEpochMs: 1,
     thermalState: ThermalStateData.nominal,
-    sensors: <SensorReadingData>[],
-    fans: [
+    sensors: const <SensorReadingData>[],
+    fans: List<FanReadingData>.unmodifiable([
       FanReadingData(
         id: 'fan-0',
         name: 'System fan',
@@ -159,7 +159,7 @@ HardwareSnapshotData _sampleSnapshot() {
         targetRpm: 2100,
         mode: FanModeData.automatic,
       ),
-    ],
+    ]),
   );
 }
 
@@ -167,8 +167,8 @@ HardwareSnapshotData _multiFanSnapshot() {
   return HardwareSnapshotData(
     capturedAtEpochMs: 1,
     thermalState: ThermalStateData.nominal,
-    sensors: <SensorReadingData>[],
-    fans: [
+    sensors: const <SensorReadingData>[],
+    fans: List<FanReadingData>.unmodifiable([
       FanReadingData(
         id: 'fan-0',
         name: 'Left fan',
@@ -187,7 +187,7 @@ HardwareSnapshotData _multiFanSnapshot() {
         targetRpm: 2200,
         mode: FanModeData.automatic,
       ),
-    ],
+    ]),
   );
 }
 

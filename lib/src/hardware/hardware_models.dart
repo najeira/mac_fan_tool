@@ -72,11 +72,21 @@ extension HardwareSnapshotDataX on HardwareSnapshotData {
   ThermalStateData get thermalLevel => thermalState ?? ThermalStateData.unknown;
 
   List<SensorReadingData> get sensorReadings {
-    return [...?sensors?.whereType<SensorReadingData>()];
+    final sensorList = sensors;
+    if (sensorList == null) {
+      return const <SensorReadingData>[];
+    }
+
+    return sensorList as List<SensorReadingData>;
   }
 
   List<FanReadingData> get fanReadings {
-    return [...?fans?.whereType<FanReadingData>()];
+    final fanList = fans;
+    if (fanList == null) {
+      return const <FanReadingData>[];
+    }
+
+    return fanList as List<FanReadingData>;
   }
 }
 

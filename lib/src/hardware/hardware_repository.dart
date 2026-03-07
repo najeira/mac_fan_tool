@@ -74,7 +74,7 @@ class HardwareRepository {
         capturedAtEpochMs:
             data.capturedAtEpochMs ?? DateTime.now().millisecondsSinceEpoch,
         thermalState: data.thermalState ?? ThermalStateData.unknown,
-        sensors: [
+        sensors: List<SensorReadingData>.unmodifiable([
           for (final sensor in data.sensors ?? const <SensorReadingData?>[])
             if (sensor != null)
               SensorReadingData(
@@ -84,8 +84,8 @@ class HardwareRepository {
                 value: sensor.value ?? 0,
                 kind: sensor.kind ?? SensorKindData.other,
               ),
-        ],
-        fans: [
+        ]),
+        fans: List<FanReadingData>.unmodifiable([
           for (final fan in data.fans ?? const <FanReadingData?>[])
             if (fan != null)
               FanReadingData(
@@ -97,7 +97,7 @@ class HardwareRepository {
                 targetRpm: fan.targetRpm,
                 mode: fan.mode ?? FanModeData.automatic,
               ),
-        ],
+        ]),
         note: data.note,
       );
     } on MissingPluginException {

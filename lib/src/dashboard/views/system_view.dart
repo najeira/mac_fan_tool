@@ -28,7 +28,7 @@ class _SystemInfoPanel extends ConsumerWidget {
     final capabilities = ref.watch(monitorCapabilitiesProvider);
     final summary = ref.watch(summaryProvider);
     final fanReadingsLength = ref.watch(
-      monitorSnapshotProvider.select((snapshot) => snapshot.fanReadings.length),
+      monitorFanReadingsProvider.select((fanReadings) => fanReadings.length),
     );
 
     return SectionPanel(
@@ -74,9 +74,7 @@ class _FansPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fanReadings = ref.watch(
-      monitorSnapshotProvider.select((snapshot) => snapshot.fanReadings),
-    );
+    final fanReadings = ref.watch(monitorFanReadingsProvider).items;
 
     return SectionPanel(
       title: 'Fans',
