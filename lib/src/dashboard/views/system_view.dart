@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/fan_control_card.dart';
-import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class SystemView extends StatelessWidget {
@@ -99,7 +99,6 @@ class _FansPanel extends ConsumerWidget {
     final snapshot = ref.watch(monitorSnapshotProvider);
     final capabilities = ref.watch(monitorCapabilitiesProvider);
     final activeFanCommandId = ref.watch(monitorActiveFanCommandIdProvider);
-    final controller = ref.read(monitorControllerProvider.notifier);
 
     return SectionPanel(
       title: 'Fans',
@@ -117,9 +116,9 @@ class _FansPanel extends ConsumerWidget {
                     fan: fan,
                     canControl: capabilities.fanControlEnabled,
                     isBusy: activeFanCommandId == fan.stableId,
-                    onAutomatic: () => controller.setFanAutomatic(fan),
+                    onAutomatic: () => ref.monitorActions.setFanAutomatic(fan),
                     onManualTargetSelected: (targetRpm) =>
-                        controller.setFanTargetRpm(fan, targetRpm),
+                        ref.monitorActions.setFanTargetRpm(fan, targetRpm),
                   ),
                   if (fan != snapshot.fanReadings.last)
                     const SizedBox(height: 16),

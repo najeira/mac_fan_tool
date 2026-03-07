@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
-import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class DashboardHeroPanel extends ConsumerWidget {
@@ -17,7 +17,6 @@ class DashboardHeroPanel extends ConsumerWidget {
     final summary = ref.watch(dashboardSummaryProvider);
     final isRefreshing = ref.watch(monitorIsRefreshingProvider);
     final isBootstrapping = ref.watch(monitorIsBootstrappingProvider);
-    final controller = ref.read(monitorControllerProvider.notifier);
     final foreground = Theme.of(context).colorScheme.onPrimary;
 
     return Container(
@@ -41,7 +40,9 @@ class DashboardHeroPanel extends ConsumerWidget {
               const _DashboardViewSwitcher(),
               const Spacer(),
               FilledButton.icon(
-                onPressed: isRefreshing ? null : () => controller.refresh(),
+                onPressed: isRefreshing
+                    ? null
+                    : () => ref.monitorActions.refresh(),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFDBE9EB),
                   foregroundColor: const Color(0xFF0F1D24),
@@ -91,7 +92,6 @@ class _DashboardViewSwitcher extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedView = ref.watch(dashboardViewProvider);
-    final controller = ref.read(dashboardViewProvider.notifier);
 
     return SegmentedButton<DashboardView>(
       segments: const [
@@ -136,7 +136,7 @@ class _DashboardViewSwitcher extends ConsumerWidget {
       ),
       onSelectionChanged: (selection) {
         if (selection.isNotEmpty) {
-          controller.setView(selection.first);
+          ref.dashboardViewActions.setView(selection.first);
         }
       },
     );
