@@ -72,4 +72,10 @@ enum FanControlWriteResultValidator {
     targetRpm: Int,
     withReply reply: @escaping (String?) -> Void
   )
+
+  func applyManualTargetRpm(
+    _ fanIndex: Int,
+    targetRpm: Int,
+    withReply reply: @escaping (String?) -> Void
+  )
 }

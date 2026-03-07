@@ -65,6 +65,22 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     }
   }
 
+  func applyManualTargetRpm(
+    _ fanIndex: Int,
+    targetRpm: Int,
+    withReply reply: @escaping (String?) -> Void
+  ) {
+    do {
+      let controller = try resolvedController()
+      try controller.applyManualTargetRpm(index: fanIndex, targetRpm: targetRpm)
+      reply(nil)
+    } catch let error as AppleSMCFanControlError {
+      reply(error.message)
+    } catch {
+      reply(String(describing: error))
+    }
+  }
+
   private func resolvedController() throws -> AppleSMCFanController {
     if let controller {
       return controller

@@ -111,6 +111,32 @@ final class RunnerTests: XCTestCase {
     XCTAssertTrue(connection.didInvalidate)
   }
 
+  func testSetFanTargetRpmUsesAtomicHelperCommand() throws {
+    var received: (fanIndex: Int, targetRpm: Int)?
+    let remote = FakeFanControlRemote(
+      setFanModeHandler: { _, _, reply in
+        reply("unexpected mode write")
+      },
+      setFanTargetRpmHandler: { _, _, reply in
+        reply("unexpected target write")
+      },
+      applyManualTargetRpmHandler: { fanIndex, targetRpm, reply in
+        received = (fanIndex, targetRpm)
+        reply(nil)
+      }
+    )
+    let connection = FakeFanControlConnection(remote: remote)
+    let client = FanControlHelperClient(
+      commandTimeout: .seconds(1),
+      environmentResolver: { testEnvironment },
+      connectionFactory: { _ in connection }
+    )
+
+    XCTAssertNoThrow(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450))
+    XCTAssertEqual(received?.fanIndex, 1)
+    XCTAssertEqual(received?.targetRpm, 2450)
+  }
+
   func testHardwareSensorBridgeSupportReturnsEmptyForMissingClient() {
     XCTAssertTrue(HardwareSensorBridgeSupport.temperatureValuesForSystemClient(nil).isEmpty)
   }
@@ -143,16 +169,20 @@ private final class FakeFanControlConnection: FanControlXPCConnection {
 private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
   typealias FanModeHandler = (Int, Int, @escaping (String?) -> Void) -> Void
   typealias FanTargetHandler = (Int, Int, @escaping (String?) -> Void) -> Void
+  typealias ApplyManualTargetHandler = (Int, Int, @escaping (String?) -> Void) -> Void
 
   private let setFanModeHandler: FanModeHandler
   private let setFanTargetRpmHandler: FanTargetHandler
+  private let applyManualTargetRpmHandler: ApplyManualTargetHandler
 
   init(
     setFanModeHandler: @escaping FanModeHandler,
-    setFanTargetRpmHandler: @escaping FanTargetHandler = { _, _, reply in reply(nil) }
+    setFanTargetRpmHandler: @escaping FanTargetHandler = { _, _, reply in reply(nil) },
+    applyManualTargetRpmHandler: @escaping ApplyManualTargetHandler = { _, _, reply in reply(nil) }
   ) {
     self.setFanModeHandler = setFanModeHandler
     self.setFanTargetRpmHandler = setFanTargetRpmHandler
+    self.applyManualTargetRpmHandler = applyManualTargetRpmHandler
   }
 
   func setFanMode(
@@ -169,5 +199,13 @@ private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
     withReply reply: @escaping (String?) -> Void
   ) {
     setFanTargetRpmHandler(fanIndex, targetRpm, reply)
+  }
+
+  func applyManualTargetRpm(
+    _ fanIndex: Int,
+    targetRpm: Int,
+    withReply reply: @escaping (String?) -> Void
+  ) {
+    applyManualTargetRpmHandler(fanIndex, targetRpm, reply)
   }
 }

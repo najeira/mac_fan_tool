@@ -118,17 +118,10 @@ class MonitorController extends Notifier<MonitorState> {
       return;
     }
 
-    final clampedTarget = targetRpm
-        .clamp(fan.safeMinimumRpm, fan.safeMaximumRpm)
-        .toInt();
-
     await _runFanCommand(
       fanId,
-      () async {
-        await _repository.setFanMode(fanId, FanModeData.manual);
-        await _repository.setFanTargetRpm(fanId, clampedTarget);
-      },
-      successMessage: '${fan.displayName} target set to $clampedTarget RPM.',
+      () => _repository.setFanTargetRpm(fanId, targetRpm),
+      successMessage: '${fan.displayName} target set to $targetRpm RPM.',
     );
   }
 

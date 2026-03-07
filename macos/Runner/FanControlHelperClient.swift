@@ -79,14 +79,14 @@ final class FanControlHelperClient {
 
   func setFanTargetRpm(fanId: String, targetRpm: Int64) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
-    let clampedTarget = max(0, min(Int(targetRpm), Int(Int32.max)))
+    let requestedTarget = Int(targetRpm)
 
     let environment = try currentEnvironment()
     if #available(macOS 13.0, *) {
       try ensureServiceReady(environment: environment)
     }
     try performCommand(environment: environment) { remote, reply in
-      remote.setFanTargetRpm(fanIndex, targetRpm: clampedTarget, withReply: reply)
+      remote.applyManualTargetRpm(fanIndex, targetRpm: requestedTarget, withReply: reply)
     }
   }
 

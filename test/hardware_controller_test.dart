@@ -12,7 +12,7 @@ void main() {
   test('fan command notices auto-dismiss after their lifetime', () async {
     final repository = _FakeHardwareRepository(
       snapshots: [_sampleSnapshot(), _sampleSnapshot()],
-      setFanModeError: StateError('native write failed'),
+      setFanTargetRpmError: StateError('native write failed'),
     );
     final container = ProviderContainer(
       overrides: [
@@ -42,6 +42,27 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 30));
 
     expect(container.read(monitorTransientNoticeProvider), isNull);
+  });
+
+  test('setFanTargetRpm uses a single atomic repository command', () async {
+    final repository = _FakeHardwareRepository(
+      snapshots: [_sampleSnapshot(), _sampleSnapshot()],
+    );
+    final container = ProviderContainer(
+      overrides: [hardwareRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    container.read(monitorControllerProvider);
+    await _waitForBootstrap(container);
+
+    final controller = container.read(monitorControllerProvider.notifier);
+    final fan = container.read(monitorSnapshotProvider).fanReadings.single;
+
+    await controller.setFanTargetRpm(fan, 2400);
+
+    expect(repository.setFanModeCalls, isEmpty);
+    expect(repository.setFanTargetRpmCalls, [('fan-0', 2400)]);
   });
 
   test('tracks multiple active fan commands independently', () async {
@@ -194,17 +215,19 @@ HardwareSnapshotData _multiFanSnapshot() {
 class _FakeHardwareRepository extends HardwareRepository {
   _FakeHardwareRepository({
     required this.snapshots,
-    this.setFanModeError,
+    this.setFanTargetRpmError,
     this.setFanModeCompleters = const {},
     this.loadSnapshotErrors = const {},
     this.loadSnapshotCompleters = const {},
   });
 
   final List<HardwareSnapshotData> snapshots;
-  final Object? setFanModeError;
+  final Object? setFanTargetRpmError;
   final Map<String, Completer<void>> setFanModeCompleters;
   final Map<int, Object> loadSnapshotErrors;
   final Map<int, Completer<void>> loadSnapshotCompleters;
+  final List<String> setFanModeCalls = <String>[];
+  final List<(String, int)> setFanTargetRpmCalls = <(String, int)>[];
   var _snapshotIndex = 0;
 
   @override
@@ -250,10 +273,7 @@ class _FakeHardwareRepository extends HardwareRepository {
 
   @override
   Future<void> setFanMode(String fanId, FanModeData mode) async {
-    if (setFanModeError != null) {
-      throw setFanModeError!;
-    }
-
+    setFanModeCalls.add(fanId);
     final completer = setFanModeCompleters[fanId];
     if (completer != null) {
       await completer.future;
@@ -261,5 +281,10 @@ class _FakeHardwareRepository extends HardwareRepository {
   }
 
   @override
-  Future<void> setFanTargetRpm(String fanId, int targetRpm) async {}
+  Future<void> setFanTargetRpm(String fanId, int targetRpm) async {
+    setFanTargetRpmCalls.add((fanId, targetRpm));
+    if (setFanTargetRpmError != null) {
+      throw setFanTargetRpmError!;
+    }
+  }
 }

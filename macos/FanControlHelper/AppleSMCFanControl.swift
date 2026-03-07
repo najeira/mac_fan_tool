@@ -707,9 +707,13 @@ enum AppleSMCFanControlError: Error {
   case modeControlUnavailable(Int)
   case targetControlUnavailable(Int)
   case smcKeyUnavailable(String)
+  case stateSnapshotUnavailable(String)
   case invalidDataSize(key: String, expected: Int, actual: Int)
   case unsupportedDataType(key: String, dataType: String)
   case valueOutOfRange(key: String, dataType: String, value: Double)
+  case targetOutOfRange(index: Int, requested: Int, minimum: Int, maximum: Int)
+  case verificationFailed(String)
+  case rollbackFailed(primaryMessage: String, rollbackMessage: String)
   case writeFailed(key: String, description: String)
 
   var message: String {
@@ -730,16 +734,44 @@ enum AppleSMCFanControlError: Error {
       return "Target RPM writes are not exposed for fan \(index) on this Mac."
     case let .smcKeyUnavailable(key):
       return "AppleSMC key \(key) is not available on this Mac."
+    case let .stateSnapshotUnavailable(key):
+      return "AppleSMC key \(key) could not be read for rollback or verification."
     case let .invalidDataSize(key, expected, actual):
       return "AppleSMC key \(key) expected \(expected) bytes, but got \(actual)."
     case let .unsupportedDataType(key, dataType):
       return "AppleSMC key \(key) uses unsupported type \(dataType)."
     case let .valueOutOfRange(key, dataType, value):
       return "Value \(value) is out of range for AppleSMC key \(key) (\(dataType))."
+    case let .targetOutOfRange(index, requested, minimum, maximum):
+      return "Fan \(index) target \(requested) RPM is outside the safe range \(minimum)-\(maximum) RPM."
+    case let .verificationFailed(message):
+      return "AppleSMC write verification failed: \(message)"
+    case let .rollbackFailed(primaryMessage, rollbackMessage):
+      return "\(primaryMessage) Rollback also failed: \(rollbackMessage)"
     case let .writeFailed(key, description):
       return "AppleSMC write to \(key) failed: \(description)."
     }
   }
+}
+
+private struct FanModeWriteCapabilities {
+  let index: Int
+  let modeKey: String
+  let forceKey: String
+  let maskBit: UInt32
+  let writesModeKey: Bool
+  let writesForceMask: Bool
+}
+
+private struct FanModeSnapshot {
+  let capabilities: FanModeWriteCapabilities
+  let modeKeyValue: UInt32?
+  let forceMaskValue: UInt32?
+}
+
+private struct FanTargetSnapshot {
+  let key: String
+  let value: Int
 }
 
 final class AppleSMCFanController {
@@ -750,60 +782,59 @@ final class AppleSMCFanController {
   }
 
   func setFanMode(index: Int, mode: AppleSMCFanMode) throws {
-    guard Sysctl.isAppleSilicon else {
-      throw AppleSMCFanControlError.unsupportedPlatform
-    }
+    try validateWritableFan(index)
+    let snapshot = try captureModeSnapshot(for: index)
 
-    try validateFanIndex(index)
-
-    let modeValue: UInt32 = mode == .manual ? 1 : 0
-    let maskBit = UInt32(1) << UInt32(index)
-
-    var results: [Result<Void, AppleSMCFanControlError>] = []
-    let modeKey = "F\(index)Md"
-
-    if smc.canWriteInteger(for: modeKey) {
-      do {
-        try smc.writeInteger(modeValue, for: modeKey)
-        results.append(.success(()))
-      } catch let error as AppleSMCFanControlError {
-        results.append(.failure(error))
+    do {
+      try writeMode(mode, using: snapshot.capabilities)
+    } catch let error as AppleSMCFanControlError {
+      try rollbackThenThrow(error) {
+        try restoreModeSnapshot(snapshot)
       }
     }
-
-    let forceKey = "FS! "
-    if smc.canWriteInteger(for: forceKey) {
-      do {
-        try smc.updateInteger(for: forceKey) { currentValue in
-          mode == .manual ? (currentValue | maskBit) : (currentValue & ~maskBit)
-        }
-        results.append(.success(()))
-      } catch let error as AppleSMCFanControlError {
-        results.append(.failure(error))
-      }
-    }
-
-    try FanControlWriteResultValidator.validate(
-      results,
-      unavailableError: AppleSMCFanControlError.modeControlUnavailable(index)
-    )
   }
 
   func setFanTargetRpm(index: Int, targetRpm: Int) throws {
+    try validateWritableFan(index)
+
+    let bounds = try fanBounds(for: index)
+    try validateTarget(targetRpm, bounds: bounds, index: index)
+    let snapshot = try captureTargetSnapshot(for: index)
+
+    do {
+      try writeTarget(targetRpm, for: index)
+    } catch let error as AppleSMCFanControlError {
+      try rollbackThenThrow(error) {
+        try restoreTargetSnapshot(snapshot)
+      }
+    }
+  }
+
+  func applyManualTargetRpm(index: Int, targetRpm: Int) throws {
+    try validateWritableFan(index)
+
+    let bounds = try fanBounds(for: index)
+    try validateTarget(targetRpm, bounds: bounds, index: index)
+    let modeSnapshot = try captureModeSnapshot(for: index)
+    let targetSnapshot = try captureTargetSnapshot(for: index)
+
+    do {
+      try writeMode(.manual, using: modeSnapshot.capabilities)
+      try writeTarget(targetRpm, for: index)
+    } catch let error as AppleSMCFanControlError {
+      try rollbackThenThrow(error) {
+        try restoreTargetSnapshot(targetSnapshot)
+        try restoreModeSnapshot(modeSnapshot)
+      }
+    }
+  }
+
+  private func validateWritableFan(_ index: Int) throws {
     guard Sysctl.isAppleSilicon else {
       throw AppleSMCFanControlError.unsupportedPlatform
     }
 
     try validateFanIndex(index)
-    let bounds = try fanBounds(for: index)
-    let clampedTarget = max(bounds.minimumRpm, min(targetRpm, bounds.maximumRpm))
-    let targetKey = "F\(index)Tg"
-
-    guard smc.canWriteNumeric(for: targetKey) else {
-      throw AppleSMCFanControlError.targetControlUnavailable(index)
-    }
-
-    try smc.writeNumeric(Double(clampedTarget), for: targetKey)
   }
 
   private func validateFanIndex(_ index: Int) throws {
@@ -837,5 +868,224 @@ final class AppleSMCFanController {
       minimumRpm: min(minimum, maximum),
       maximumRpm: max(minimum, maximum)
     )
+  }
+
+  private func validateTarget(
+    _ targetRpm: Int,
+    bounds: (minimumRpm: Int, maximumRpm: Int),
+    index: Int
+  ) throws {
+    guard targetRpm >= bounds.minimumRpm, targetRpm <= bounds.maximumRpm else {
+      throw AppleSMCFanControlError.targetOutOfRange(
+        index: index,
+        requested: targetRpm,
+        minimum: bounds.minimumRpm,
+        maximum: bounds.maximumRpm
+      )
+    }
+  }
+
+  private func captureModeSnapshot(for index: Int) throws -> FanModeSnapshot {
+    let capabilities = FanModeWriteCapabilities(
+      index: index,
+      modeKey: "F\(index)Md",
+      forceKey: "FS! ",
+      maskBit: UInt32(1) << UInt32(index),
+      writesModeKey: smc.canWriteInteger(for: "F\(index)Md"),
+      writesForceMask: smc.canWriteInteger(for: "FS! ")
+    )
+
+    guard capabilities.writesModeKey || capabilities.writesForceMask else {
+      throw AppleSMCFanControlError.modeControlUnavailable(index)
+    }
+
+    let modeKeyValue =
+      capabilities.writesModeKey
+      ? try readIntegerKey(capabilities.modeKey, allowZero: true)
+      : nil
+    let forceMaskValue =
+      capabilities.writesForceMask
+      ? try readIntegerKey(capabilities.forceKey, allowZero: true)
+      : nil
+
+    return FanModeSnapshot(
+      capabilities: capabilities,
+      modeKeyValue: modeKeyValue,
+      forceMaskValue: forceMaskValue
+    )
+  }
+
+  private func captureTargetSnapshot(for index: Int) throws -> FanTargetSnapshot {
+    let targetKey = "F\(index)Tg"
+    guard smc.canWriteNumeric(for: targetKey) else {
+      throw AppleSMCFanControlError.targetControlUnavailable(index)
+    }
+
+    guard let value = smc.value(for: targetKey, allowZero: true) else {
+      throw AppleSMCFanControlError.stateSnapshotUnavailable(targetKey)
+    }
+
+    return FanTargetSnapshot(key: targetKey, value: Int(value.rounded()))
+  }
+
+  private func writeMode(
+    _ mode: AppleSMCFanMode,
+    using capabilities: FanModeWriteCapabilities
+  ) throws {
+    let modeValue: UInt32 = mode == .manual ? 1 : 0
+    var results: [Result<Void, AppleSMCFanControlError>] = []
+
+    if capabilities.writesModeKey {
+      do {
+        try smc.writeInteger(modeValue, for: capabilities.modeKey)
+        results.append(.success(()))
+      } catch let error as AppleSMCFanControlError {
+        results.append(.failure(error))
+      }
+    }
+
+    if capabilities.writesForceMask {
+      do {
+        try smc.updateInteger(for: capabilities.forceKey) { currentValue in
+          mode == .manual
+            ? (currentValue | capabilities.maskBit)
+            : (currentValue & ~capabilities.maskBit)
+        }
+        results.append(.success(()))
+      } catch let error as AppleSMCFanControlError {
+        results.append(.failure(error))
+      }
+    }
+
+    try FanControlWriteResultValidator.validate(
+      results,
+      unavailableError: AppleSMCFanControlError.modeControlUnavailable(capabilities.index)
+    )
+    try verifyMode(mode, using: capabilities)
+  }
+
+  private func restoreModeSnapshot(_ snapshot: FanModeSnapshot) throws {
+    if snapshot.capabilities.writesModeKey {
+      guard let modeKeyValue = snapshot.modeKeyValue else {
+        throw AppleSMCFanControlError.stateSnapshotUnavailable(snapshot.capabilities.modeKey)
+      }
+      try smc.writeInteger(modeKeyValue, for: snapshot.capabilities.modeKey)
+      try verifyIntegerValue(
+        modeKeyValue,
+        for: snapshot.capabilities.modeKey,
+        failureDescription:
+          "expected \(snapshot.capabilities.modeKey) to restore to \(modeKeyValue)"
+      )
+    }
+
+    if snapshot.capabilities.writesForceMask {
+      guard let forceMaskValue = snapshot.forceMaskValue else {
+        throw AppleSMCFanControlError.stateSnapshotUnavailable(snapshot.capabilities.forceKey)
+      }
+      try smc.writeInteger(forceMaskValue, for: snapshot.capabilities.forceKey)
+      try verifyIntegerValue(
+        forceMaskValue,
+        for: snapshot.capabilities.forceKey,
+        failureDescription:
+          "expected \(snapshot.capabilities.forceKey) to restore to \(forceMaskValue)"
+      )
+    }
+  }
+
+  private func verifyMode(
+    _ mode: AppleSMCFanMode,
+    using capabilities: FanModeWriteCapabilities
+  ) throws {
+    let expectsManual = mode == .manual
+
+    if capabilities.writesModeKey {
+      let actualModeValue = try readIntegerKey(capabilities.modeKey, allowZero: true)
+      guard (actualModeValue > 0) == expectsManual else {
+        throw AppleSMCFanControlError.verificationFailed(
+          "expected \(capabilities.modeKey) to indicate \(mode), but read back \(actualModeValue)"
+        )
+      }
+    }
+
+    if capabilities.writesForceMask {
+      let actualForceMask = try readIntegerKey(capabilities.forceKey, allowZero: true)
+      let isManual = (actualForceMask & capabilities.maskBit) != 0
+      guard isManual == expectsManual else {
+        let expectedState = expectsManual ? "set" : "cleared"
+        throw AppleSMCFanControlError.verificationFailed(
+          "expected \(capabilities.forceKey) bit \(capabilities.index) to be \(expectedState), but read back \(actualForceMask)"
+        )
+      }
+    }
+  }
+
+  private func writeTarget(_ targetRpm: Int, for index: Int) throws {
+    let targetKey = "F\(index)Tg"
+    guard smc.canWriteNumeric(for: targetKey) else {
+      throw AppleSMCFanControlError.targetControlUnavailable(index)
+    }
+
+    try smc.writeNumeric(Double(targetRpm), for: targetKey)
+    try verifyTarget(targetRpm, for: targetKey)
+  }
+
+  private func restoreTargetSnapshot(_ snapshot: FanTargetSnapshot) throws {
+    try smc.writeNumeric(Double(snapshot.value), for: snapshot.key)
+    try verifyTarget(snapshot.value, for: snapshot.key)
+  }
+
+  private func verifyTarget(_ expectedTargetRpm: Int, for key: String) throws {
+    guard let actualValue = smc.value(for: key, allowZero: true) else {
+      throw AppleSMCFanControlError.stateSnapshotUnavailable(key)
+    }
+
+    let actualTargetRpm = Int(actualValue.rounded())
+    guard actualTargetRpm == expectedTargetRpm else {
+      throw AppleSMCFanControlError.verificationFailed(
+        "expected \(key) to read back \(expectedTargetRpm) RPM, but got \(actualTargetRpm) RPM"
+      )
+    }
+  }
+
+  private func readIntegerKey(_ key: String, allowZero: Bool) throws -> UInt32 {
+    guard let value = smc.integerValue(for: key, allowZero: allowZero) else {
+      throw AppleSMCFanControlError.stateSnapshotUnavailable(key)
+    }
+
+    return value
+  }
+
+  private func verifyIntegerValue(
+    _ expected: UInt32,
+    for key: String,
+    failureDescription: String
+  ) throws {
+    let actual = try readIntegerKey(key, allowZero: true)
+    guard actual == expected else {
+      throw AppleSMCFanControlError.verificationFailed(
+        "\(failureDescription), but read back \(actual)"
+      )
+    }
+  }
+
+  private func rollbackThenThrow(
+    _ primaryError: AppleSMCFanControlError,
+    rollback: () throws -> Void
+  ) throws {
+    do {
+      try rollback()
+    } catch let rollbackError as AppleSMCFanControlError {
+      throw AppleSMCFanControlError.rollbackFailed(
+        primaryMessage: primaryError.message,
+        rollbackMessage: rollbackError.message
+      )
+    } catch {
+      throw AppleSMCFanControlError.rollbackFailed(
+        primaryMessage: primaryError.message,
+        rollbackMessage: String(describing: error)
+      )
+    }
+
+    throw primaryError
   }
 }
