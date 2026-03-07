@@ -11,15 +11,18 @@ final class FanControlHelperClient {
   private let commandTimeout: DispatchTimeInterval
   private let environmentResolver: EnvironmentResolver?
   private let connectionFactory: ConnectionFactory?
+  private let serviceReadinessChecker: FanControlServiceReadinessChecking
 
   init(
     commandTimeout: DispatchTimeInterval = .seconds(10),
     environmentResolver: EnvironmentResolver? = nil,
-    connectionFactory: ConnectionFactory? = nil
+    connectionFactory: ConnectionFactory? = nil,
+    serviceReadinessChecker: FanControlServiceReadinessChecking = SMAppServiceReadinessChecker()
   ) {
     self.commandTimeout = commandTimeout
     self.environmentResolver = environmentResolver
     self.connectionFactory = connectionFactory
+    self.serviceReadinessChecker = serviceReadinessChecker
   }
 
   func canControlFans(isFanControlSupported: Bool) -> Bool {
@@ -68,10 +71,7 @@ final class FanControlHelperClient {
 
   func setFanMode(fanId: String, mode: FanModeData) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
-    let environment = try currentEnvironment()
-    if #available(macOS 13.0, *) {
-      try ensureServiceReady(environment: environment)
-    }
+    let environment = try commandEnvironment()
     try performCommand(environment: environment) { remote, reply in
       remote.setFanMode(fanIndex, modeRawValue: mode.rawValue, withReply: reply)
     }
@@ -81,10 +81,7 @@ final class FanControlHelperClient {
     let fanIndex = try resolvedFanIndex(from: fanId)
     let requestedTarget = Int(targetRpm)
 
-    let environment = try currentEnvironment()
-    if #available(macOS 13.0, *) {
-      try ensureServiceReady(environment: environment)
-    }
+    let environment = try commandEnvironment()
     try performCommand(environment: environment) { remote, reply in
       remote.applyManualTargetRpm(fanIndex, targetRpm: requestedTarget, withReply: reply)
     }
@@ -102,110 +99,6 @@ final class FanControlHelperClient {
       return .unavailable(error)
     } catch {
       return .unavailable(.configurationInvalid(String(describing: error)))
-    }
-  }
-
-  @available(macOS 13.0, *)
-  private func ensureServiceReady(environment: ResolvedEnvironment) throws {
-    switch environment.service.status {
-    case .enabled:
-      return
-
-    case .notRegistered, .notFound:
-      try registerService(environment: environment, allowReset: true)
-      try ensureRegisteredStatus(environment: environment)
-
-    case .requiresApproval:
-      throw FanControlHelperClientError.requiresApproval
-
-    @unknown default:
-      throw FanControlHelperClientError.registrationFailed(
-        message: "The privileged helper returned an unknown registration state."
-      )
-    }
-  }
-
-  @available(macOS 13.0, *)
-  private func registerService(
-    environment: ResolvedEnvironment,
-    allowReset: Bool
-  ) throws {
-    do {
-      try environment.service.register()
-    } catch {
-      let nsError = error as NSError
-
-      if allowReset && shouldResetRegistration(status: environment.service.status, error: nsError) {
-        try resetRegistration(environment: environment)
-        try registerService(environment: environment, allowReset: false)
-        return
-      }
-
-      if nsError.code != kSMErrorAlreadyRegistered {
-        throw FanControlHelperClientError.registrationFailed(
-          message: registrationFailureMessage(for: nsError)
-        )
-      }
-    }
-
-    if allowReset && environment.service.status == .notFound {
-      try resetRegistration(environment: environment)
-      try registerService(environment: environment, allowReset: false)
-    }
-  }
-
-  @available(macOS 13.0, *)
-  private func resetRegistration(environment: ResolvedEnvironment) throws {
-    do {
-      try environment.service.unregister()
-    } catch {
-      let nsError = error as NSError
-      if nsError.code != kSMErrorJobNotFound {
-        throw FanControlHelperClientError.registrationFailed(
-          message: registrationFailureMessage(for: nsError)
-        )
-      }
-    }
-  }
-
-  @available(macOS 13.0, *)
-  private func ensureRegisteredStatus(environment: ResolvedEnvironment) throws {
-    switch environment.service.status {
-    case .enabled:
-      return
-    case .requiresApproval:
-      throw FanControlHelperClientError.requiresApproval
-    case .notFound:
-      throw FanControlHelperClientError.helperUnavailable
-    case .notRegistered:
-      throw FanControlHelperClientError.registrationFailed(
-        message: "macOS did not keep the privileged helper registered."
-      )
-    @unknown default:
-      throw FanControlHelperClientError.registrationFailed(
-        message: "The privileged helper returned an unknown registration state."
-      )
-    }
-  }
-
-  @available(macOS 13.0, *)
-  private func shouldResetRegistration(
-    status: SMAppService.Status,
-    error: NSError
-  ) -> Bool {
-    if status == .notFound {
-      return true
-    }
-
-    switch error.code {
-    case kSMErrorAlreadyRegistered,
-      kSMErrorJobPlistNotFound,
-      kSMErrorInvalidPlist,
-      kSMErrorToolNotValid,
-      kSMErrorInvalidSignature:
-      return true
-    default:
-      return false
     }
   }
 
@@ -275,6 +168,12 @@ final class FanControlHelperClient {
     try awaiter.wait(timeout: timeout)
   }
 
+  private func commandEnvironment() throws -> ResolvedEnvironment {
+    let environment = try currentEnvironment()
+    try serviceReadinessChecker.ensureReady(environment: environment)
+    return environment
+  }
+
   private func currentEnvironment() throws -> ResolvedEnvironment {
     if let environmentResolver {
       return try environmentResolver()
@@ -305,23 +204,6 @@ final class FanControlHelperClient {
     }
 
     return index
-  }
-
-  private func registrationFailureMessage(for error: NSError) -> String {
-    switch error.code {
-    case kSMErrorInvalidSignature:
-      return "The app or bundled helper is not signed in a way that ServiceManagement accepts."
-    case kSMErrorAuthorizationFailure:
-      return "macOS refused the authorization needed to register the privileged helper."
-    case kSMErrorToolNotValid, kSMErrorJobPlistNotFound, kSMErrorInvalidPlist:
-      return "The bundled privileged helper could not be validated by macOS."
-    case kSMErrorJobNotFound:
-      return "macOS could not find the helper registration after refreshing it."
-    case kSMErrorLaunchDeniedByUser:
-      return FanControlHelperClientError.requiresApproval.message
-    default:
-      return error.localizedDescription
-    }
   }
 
   private func resolvedEnvironment() throws -> ResolvedEnvironment {
@@ -527,6 +409,141 @@ enum FanControlHelperClientError: Error, Equatable {
 private enum HelperAvailability {
   case unavailable(FanControlHelperClientError)
   case available(ResolvedEnvironment, HelperServiceStatus)
+}
+
+protocol FanControlServiceReadinessChecking {
+  func ensureReady(environment: ResolvedEnvironment) throws
+}
+
+private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking {
+  func ensureReady(environment: ResolvedEnvironment) throws {
+    guard #available(macOS 13.0, *) else {
+      return
+    }
+
+    try ensureServiceReady(environment: environment)
+  }
+
+  @available(macOS 13.0, *)
+  private func ensureServiceReady(environment: ResolvedEnvironment) throws {
+    switch environment.service.status {
+    case .enabled:
+      return
+
+    case .notRegistered, .notFound:
+      try registerService(environment: environment, allowReset: true)
+      try ensureRegisteredStatus(environment: environment)
+
+    case .requiresApproval:
+      throw FanControlHelperClientError.requiresApproval
+
+    @unknown default:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "The privileged helper returned an unknown registration state."
+      )
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func registerService(
+    environment: ResolvedEnvironment,
+    allowReset: Bool
+  ) throws {
+    do {
+      try environment.service.register()
+    } catch {
+      let nsError = error as NSError
+
+      if allowReset && shouldResetRegistration(status: environment.service.status, error: nsError) {
+        try resetRegistration(environment: environment)
+        try registerService(environment: environment, allowReset: false)
+        return
+      }
+
+      if nsError.code != kSMErrorAlreadyRegistered {
+        throw FanControlHelperClientError.registrationFailed(
+          message: registrationFailureMessage(for: nsError)
+        )
+      }
+    }
+
+    if allowReset && environment.service.status == .notFound {
+      try resetRegistration(environment: environment)
+      try registerService(environment: environment, allowReset: false)
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func resetRegistration(environment: ResolvedEnvironment) throws {
+    do {
+      try environment.service.unregister()
+    } catch {
+      let nsError = error as NSError
+      if nsError.code != kSMErrorJobNotFound {
+        throw FanControlHelperClientError.registrationFailed(
+          message: registrationFailureMessage(for: nsError)
+        )
+      }
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func ensureRegisteredStatus(environment: ResolvedEnvironment) throws {
+    switch environment.service.status {
+    case .enabled:
+      return
+    case .requiresApproval:
+      throw FanControlHelperClientError.requiresApproval
+    case .notFound:
+      throw FanControlHelperClientError.helperUnavailable
+    case .notRegistered:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "macOS did not keep the privileged helper registered."
+      )
+    @unknown default:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "The privileged helper returned an unknown registration state."
+      )
+    }
+  }
+
+  @available(macOS 13.0, *)
+  private func shouldResetRegistration(
+    status: SMAppService.Status,
+    error: NSError
+  ) -> Bool {
+    if status == .notFound {
+      return true
+    }
+
+    switch error.code {
+    case kSMErrorAlreadyRegistered,
+      kSMErrorJobPlistNotFound,
+      kSMErrorInvalidPlist,
+      kSMErrorToolNotValid,
+      kSMErrorInvalidSignature:
+      return true
+    default:
+      return false
+    }
+  }
+
+  private func registrationFailureMessage(for error: NSError) -> String {
+    switch error.code {
+    case kSMErrorInvalidSignature:
+      return "The app or bundled helper is not signed in a way that ServiceManagement accepts."
+    case kSMErrorAuthorizationFailure:
+      return "macOS refused the authorization needed to register the privileged helper."
+    case kSMErrorToolNotValid, kSMErrorJobPlistNotFound, kSMErrorInvalidPlist:
+      return "The bundled privileged helper could not be validated by macOS."
+    case kSMErrorJobNotFound:
+      return "macOS could not find the helper registration after refreshing it."
+    case kSMErrorLaunchDeniedByUser:
+      return FanControlHelperClientError.requiresApproval.message
+    default:
+      return error.localizedDescription
+    }
+  }
 }
 
 private enum HelperServiceStatus {

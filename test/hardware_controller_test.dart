@@ -65,6 +65,74 @@ void main() {
     expect(repository.setFanTargetRpmCalls, [('fan-0', 2400)]);
   });
 
+  test('setFanTargetRpm shows success only after refresh completes', () async {
+    final refreshCompleter = Completer<void>();
+    final repository = _FakeHardwareRepository(
+      snapshots: [_sampleSnapshot(), _sampleSnapshot()],
+      loadSnapshotCompleters: {1: refreshCompleter},
+    );
+    final container = ProviderContainer(
+      overrides: [hardwareRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    container.read(monitorControllerProvider);
+    await _waitForBootstrap(container);
+
+    final controller = container.read(monitorControllerProvider.notifier);
+    final fan = container.read(monitorSnapshotProvider).fanReadings.single;
+
+    final commandFuture = controller.setFanTargetRpm(fan, 2400);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(monitorTransientNoticeProvider), isNull);
+    expect(
+      container.read(monitorActiveFanCommandIdsProvider),
+      contains('fan-0'),
+    );
+
+    refreshCompleter.complete();
+    await commandFuture;
+
+    final notice = container.read(monitorTransientNoticeProvider);
+    expect(notice?.tone, MonitorNoticeTone.success);
+    expect(notice?.message, 'System fan target set to 2400 RPM.');
+    expect(container.read(monitorActiveFanCommandIdsProvider), isEmpty);
+  });
+
+  test(
+    'setFanTargetRpm shows an info notice when refresh fails afterwards',
+    () async {
+      final repository = _FakeHardwareRepository(
+        snapshots: [_sampleSnapshot(), _sampleSnapshot()],
+        loadSnapshotErrors: {1: StateError('stale telemetry')},
+      );
+      final container = ProviderContainer(
+        overrides: [hardwareRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+
+      container.read(monitorControllerProvider);
+      await _waitForBootstrap(container);
+
+      final controller = container.read(monitorControllerProvider.notifier);
+      final fan = container.read(monitorSnapshotProvider).fanReadings.single;
+
+      await controller.setFanTargetRpm(fan, 2400);
+
+      final notice = container.read(monitorTransientNoticeProvider);
+      expect(notice?.tone, MonitorNoticeTone.info);
+      expect(
+        notice?.message,
+        'System fan target set to 2400 RPM. Telemetry refresh failed, so the dashboard may be stale.',
+      );
+      expect(
+        container.read(monitorErrorMessageProvider),
+        'Telemetry refresh failed: Bad state: stale telemetry',
+      );
+    },
+  );
+
   test('tracks multiple active fan commands independently', () async {
     final firstFanModeCompleter = Completer<void>();
     final secondFanModeCompleter = Completer<void>();

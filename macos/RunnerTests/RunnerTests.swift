@@ -11,6 +11,10 @@ private enum TestWriteError: Error, Equatable {
   case partialFailure
 }
 
+private struct NoOpServiceReadinessChecker: FanControlServiceReadinessChecking {
+  func ensureReady(environment: ResolvedEnvironment) throws {}
+}
+
 final class RunnerTests: XCTestCase {
   func testCodeSigningRequirementBuilderIncludesAnchorAndTeam() {
     XCTAssertEqual(
@@ -117,9 +121,6 @@ final class RunnerTests: XCTestCase {
       setFanModeHandler: { _, _, reply in
         reply("unexpected mode write")
       },
-      setFanTargetRpmHandler: { _, _, reply in
-        reply("unexpected target write")
-      },
       applyManualTargetRpmHandler: { fanIndex, targetRpm, reply in
         received = (fanIndex, targetRpm)
         reply(nil)
@@ -129,12 +130,135 @@ final class RunnerTests: XCTestCase {
     let client = FanControlHelperClient(
       commandTimeout: .seconds(1),
       environmentResolver: { testEnvironment },
-      connectionFactory: { _ in connection }
+      connectionFactory: { _ in connection },
+      serviceReadinessChecker: NoOpServiceReadinessChecker()
     )
 
     XCTAssertNoThrow(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450))
     XCTAssertEqual(received?.fanIndex, 1)
     XCTAssertEqual(received?.targetRpm, 2450)
+  }
+
+  func testAppleSMCFanControllerRejectsOutOfRangeTargetsWithoutWriting() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+        "F0Ac": 2200,
+        "F0Mn": 1200,
+        "F0Mx": 4000,
+        "F0Tg": 2200,
+      ],
+      integerValues: [
+        "F0Md": 0,
+        "FS! ": 0,
+      ],
+      numericWritableKeys: ["F0Tg"],
+      integerWritableKeys: ["F0Md", "FS! "]
+    )
+    let controller = AppleSMCFanController(
+      smc: smc,
+      platform: TestFanControlPlatform(isAppleSilicon: true)
+    )
+
+    XCTAssertThrowsError(try controller.applyManualTargetRpm(index: 0, targetRpm: 1100)) { error in
+      guard let fanError = error as? AppleSMCFanControlError else {
+        return XCTFail("Unexpected error: \(error)")
+      }
+      guard case let .targetOutOfRange(index, requested, minimum, maximum) = fanError else {
+        return XCTFail("Unexpected error: \(fanError)")
+      }
+      XCTAssertEqual(index, 0)
+      XCTAssertEqual(requested, 1100)
+      XCTAssertEqual(minimum, 1200)
+      XCTAssertEqual(maximum, 4000)
+    }
+    XCTAssertTrue(smc.writeLog.isEmpty)
+  }
+
+  func testAppleSMCFanControllerRollsBackModeAndTargetWhenTargetVerificationFails() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+        "F0Ac": 2200,
+        "F0Mn": 1200,
+        "F0Mx": 4000,
+        "F0Tg": 2200,
+      ],
+      integerValues: [
+        "F0Md": 0,
+        "FS! ": 0,
+      ],
+      numericWritableKeys: ["F0Tg"],
+      integerWritableKeys: ["F0Md", "FS! "]
+    )
+    var targetWrites = 0
+    smc.numericWriteBehaviors["F0Tg"] = { value in
+      targetWrites += 1
+      return targetWrites == 1 ? value + 75 : value
+    }
+    let controller = AppleSMCFanController(
+      smc: smc,
+      platform: TestFanControlPlatform(isAppleSilicon: true)
+    )
+
+    XCTAssertThrowsError(try controller.applyManualTargetRpm(index: 0, targetRpm: 2450)) { error in
+      guard let fanError = error as? AppleSMCFanControlError else {
+        return XCTFail("Unexpected error: \(error)")
+      }
+      guard case let .verificationFailed(message) = fanError else {
+        return XCTFail("Unexpected error: \(fanError)")
+      }
+      XCTAssertTrue(message.contains("F0Tg"))
+    }
+
+    XCTAssertEqual(smc.numericValues["F0Tg"], 2200)
+    XCTAssertEqual(smc.integerValues["F0Md"], 0)
+    XCTAssertEqual(smc.integerValues["FS! "], 0)
+  }
+
+  func testAppleSMCFanControllerReportsRollbackFailureWhenRestoreFails() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+        "F0Ac": 2200,
+        "F0Mn": 1200,
+        "F0Mx": 4000,
+        "F0Tg": 2200,
+      ],
+      integerValues: [
+        "F0Md": 0,
+        "FS! ": 0,
+      ],
+      numericWritableKeys: ["F0Tg"],
+      integerWritableKeys: ["F0Md", "FS! "]
+    )
+    var targetWrites = 0
+    smc.numericWriteBehaviors["F0Tg"] = { value in
+      targetWrites += 1
+      if targetWrites == 1 {
+        return value + 50
+      }
+
+      throw AppleSMCFanControlError.writeFailed(
+        key: "F0Tg",
+        description: "rollback refused"
+      )
+    }
+    let controller = AppleSMCFanController(
+      smc: smc,
+      platform: TestFanControlPlatform(isAppleSilicon: true)
+    )
+
+    XCTAssertThrowsError(try controller.applyManualTargetRpm(index: 0, targetRpm: 2450)) { error in
+      guard let fanError = error as? AppleSMCFanControlError else {
+        return XCTFail("Unexpected error: \(error)")
+      }
+      guard case let .rollbackFailed(primaryMessage, rollbackMessage) = fanError else {
+        return XCTFail("Unexpected error: \(fanError)")
+      }
+      XCTAssertTrue(primaryMessage.contains("verification failed"))
+      XCTAssertTrue(rollbackMessage.contains("rollback refused"))
+    }
   }
 
   func testSetFanModeRejectsNonCanonicalFanIds() {
@@ -216,20 +340,16 @@ private final class FakeFanControlConnection: FanControlXPCConnection {
 
 private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
   typealias FanModeHandler = (Int, Int, @escaping (String?) -> Void) -> Void
-  typealias FanTargetHandler = (Int, Int, @escaping (String?) -> Void) -> Void
   typealias ApplyManualTargetHandler = (Int, Int, @escaping (String?) -> Void) -> Void
 
   private let setFanModeHandler: FanModeHandler
-  private let setFanTargetRpmHandler: FanTargetHandler
   private let applyManualTargetRpmHandler: ApplyManualTargetHandler
 
   init(
     setFanModeHandler: @escaping FanModeHandler,
-    setFanTargetRpmHandler: @escaping FanTargetHandler = { _, _, reply in reply(nil) },
     applyManualTargetRpmHandler: @escaping ApplyManualTargetHandler = { _, _, reply in reply(nil) }
   ) {
     self.setFanModeHandler = setFanModeHandler
-    self.setFanTargetRpmHandler = setFanTargetRpmHandler
     self.applyManualTargetRpmHandler = applyManualTargetRpmHandler
   }
 
@@ -241,19 +361,89 @@ private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
     setFanModeHandler(fanIndex, modeRawValue, reply)
   }
 
-  func setFanTargetRpm(
-    _ fanIndex: Int,
-    targetRpm: Int,
-    withReply reply: @escaping (String?) -> Void
-  ) {
-    setFanTargetRpmHandler(fanIndex, targetRpm, reply)
-  }
-
   func applyManualTargetRpm(
     _ fanIndex: Int,
     targetRpm: Int,
     withReply reply: @escaping (String?) -> Void
   ) {
     applyManualTargetRpmHandler(fanIndex, targetRpm, reply)
+  }
+}
+
+private struct TestFanControlPlatform: FanControlPlatformChecking {
+  let isAppleSilicon: Bool
+}
+
+private final class FakeAppleSMC: AppleSMCControlling {
+  var numericValues: [String: Double]
+  var integerValues: [String: UInt32]
+  let numericWritableKeys: Set<String>
+  let integerWritableKeys: Set<String>
+  var numericWriteBehaviors: [String: (Double) throws -> Double] = [:]
+  var integerWriteBehaviors: [String: (UInt32) throws -> UInt32] = [:]
+  private(set) var writeLog: [String] = []
+
+  init(
+    numericValues: [String: Double],
+    integerValues: [String: UInt32],
+    numericWritableKeys: Set<String>,
+    integerWritableKeys: Set<String>
+  ) {
+    self.numericValues = numericValues
+    self.integerValues = integerValues
+    self.numericWritableKeys = numericWritableKeys
+    self.integerWritableKeys = integerWritableKeys
+  }
+
+  func value(for key: String, allowZero: Bool) -> Double? {
+    guard let value = numericValues[key] else {
+      return nil
+    }
+
+    if !allowZero && value == 0 {
+      return nil
+    }
+
+    return value
+  }
+
+  func integerValue(for key: String, allowZero: Bool) -> UInt32? {
+    guard let value = integerValues[key] else {
+      return nil
+    }
+
+    if !allowZero && value == 0 {
+      return nil
+    }
+
+    return value
+  }
+
+  func canWriteNumeric(for key: String) -> Bool {
+    numericWritableKeys.contains(key)
+  }
+
+  func canWriteInteger(for key: String) -> Bool {
+    integerWritableKeys.contains(key)
+  }
+
+  func writeNumeric(_ numericValue: Double, for key: String) throws {
+    writeLog.append("numeric:\(key):\(numericValue)")
+    let storedValue = try numericWriteBehaviors[key]?(numericValue) ?? numericValue
+    numericValues[key] = storedValue
+  }
+
+  func writeInteger(_ integerValue: UInt32, for key: String) throws {
+    writeLog.append("integer:\(key):\(integerValue)")
+    let storedValue = try integerWriteBehaviors[key]?(integerValue) ?? integerValue
+    integerValues[key] = storedValue
+  }
+
+  func updateInteger(for key: String, transform: (UInt32) -> UInt32) throws {
+    guard let currentValue = integerValues[key] else {
+      throw AppleSMCFanControlError.smcKeyUnavailable(key)
+    }
+
+    try writeInteger(transform(currentValue), for: key)
   }
 }
