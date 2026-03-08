@@ -3,11 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>BundleProgram</key>
-	<string>Contents/Library/LaunchServices/FanControlHelper</string>
+	<string>Contents/Library/HelperTools/FanControlHelper</string>
 	<key>AssociatedBundleIdentifiers</key>
-	<array>
-		<string>placeholder.bundle.id</string>
-	</array>
+	<string>placeholder.bundle.id</string>
 	<key>Label</key>
 	<string>placeholder.fancontrol.helper</string>
 	<key>MachServices</key>
@@ -15,6 +13,10 @@
 		<key>placeholder.fancontrol.helper</key>
 		<true/>
 	</dict>
+	<key>ProgramArguments</key>
+	<array>
+		<string>FanControlHelper</string>
+	</array>
 	<key>RunAtLoad</key>
 	<false/>
 	<key>UserName</key>
