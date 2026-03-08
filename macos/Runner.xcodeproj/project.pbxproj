@@ -24,12 +24,14 @@
 		0A7C990F2DCA1001004A1120 /* HardwareBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */; };
 		0A7C99102DCA1001004A1120 /* HardwareApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */; };
 		0A7C99122DDA1001004A1120 /* HardwareSensorBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */; };
+		0AFC10012E0A1001004A1120 /* AppleSMCConnectionCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AFC10002E0A1001004A1120 /* AppleSMCConnectionCore.swift */; };
 		0AB100012DCE1001004A1120 /* FanControlHelperClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100112DCE1001004A1120 /* FanControlHelperClient.swift */; };
 		0AB100022DCE1001004A1120 /* FanControlXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100122DCE1001004A1120 /* FanControlXPCProtocol.swift */; };
 		0AB100032DCE1001004A1120 /* FanControlXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100122DCE1001004A1120 /* FanControlXPCProtocol.swift */; };
 		0AB100042DCE1001004A1120 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100132DCE1001004A1120 /* main.swift */; };
 		0AB100052DCE1001004A1120 /* FanControlHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100142DCE1001004A1120 /* FanControlHelper.swift */; };
 		0AB100062DCE1001004A1120 /* AppleSMCFanControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB100152DCE1001004A1120 /* AppleSMCFanControl.swift */; };
+		0AFC10022E0A1001004A1120 /* AppleSMCConnectionCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AFC10002E0A1001004A1120 /* AppleSMCConnectionCore.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
@@ -81,6 +83,7 @@
 		0A7C990D2DCA1001004A1120 /* HardwareBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareBridge.swift; sourceTree = "<group>"; };
 		0A7C990E2DCA1001004A1120 /* HardwareApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pigeon/HardwareApi.g.swift; sourceTree = "<group>"; };
 		0A7C99112DDA1001004A1120 /* HardwareSensorBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HardwareSensorBridge.m; sourceTree = "<group>"; };
+		0AFC10002E0A1001004A1120 /* AppleSMCConnectionCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSMCConnectionCore.swift; sourceTree = "<group>"; };
 		0AB100112DCE1001004A1120 /* FanControlHelperClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanControlHelperClient.swift; sourceTree = "<group>"; };
 		0AB100122DCE1001004A1120 /* FanControlXPCProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanControlXPCProtocol.swift; sourceTree = "<group>"; };
 		0AB100132DCE1001004A1120 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -149,6 +152,7 @@
 		0AB100182DCE1001004A1120 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				0AFC10002E0A1001004A1120 /* AppleSMCConnectionCore.swift */,
 				0AB100122DCE1001004A1120 /* FanControlXPCProtocol.swift */,
 			);
 			path = Shared;
@@ -547,6 +551,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0AFC10022E0A1001004A1120 /* AppleSMCConnectionCore.swift in Sources */,
 				0AB100062DCE1001004A1120 /* AppleSMCFanControl.swift in Sources */,
 				0AB100052DCE1001004A1120 /* FanControlHelper.swift in Sources */,
 				0AB100042DCE1001004A1120 /* main.swift in Sources */,
@@ -566,6 +571,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0AFC10012E0A1001004A1120 /* AppleSMCConnectionCore.swift in Sources */,
 				0AB100022DCE1001004A1120 /* FanControlXPCProtocol.swift in Sources */,
 				0AB100012DCE1001004A1120 /* FanControlHelperClient.swift in Sources */,
 				0A7C99102DCA1001004A1120 /* HardwareApi.g.swift in Sources */,
