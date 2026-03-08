@@ -13,120 +13,116 @@ class HardwareRepository {
   final DeviceInfoPlugin _deviceInfoPlugin;
 
   Future<DeviceMetadata> loadDeviceMetadata() async {
-    try {
-      final info = await _deviceInfoPlugin.macOsInfo;
+    return _loadWithFallback(
+      load: () async {
+        final info = await _deviceInfoPlugin.macOsInfo;
 
-      return DeviceMetadata(
-        computerName: info.computerName,
-        model: info.model,
-        architecture: info.arch,
-        osVersion: info.osRelease,
-      );
-    } on MissingPluginException {
-      return const DeviceMetadata.unknown(
+        return DeviceMetadata(
+          computerName: info.computerName,
+          model: info.model,
+          architecture: info.arch,
+          osVersion: info.osRelease,
+        );
+      },
+      onMissingPlugin: () => const DeviceMetadata.unknown(
         note:
             'device_info_plus is not available in tests until plugin registration runs.',
-      );
-    } on PlatformException catch (error) {
-      return DeviceMetadata.unknown(
+      ),
+      onPlatformError: (error) => DeviceMetadata.unknown(
         note: 'Device metadata is unavailable: ${error.message ?? error.code}',
-      );
-    } catch (error) {
-      return DeviceMetadata.unknown(
+      ),
+      onUnknownError: (error) => DeviceMetadata.unknown(
         note: 'Device metadata is unavailable: $error',
-      );
-    }
+      ),
+    );
   }
 
   Future<HardwareCapabilitiesData> loadCapabilities() async {
-    try {
-      final data = await _api.getCapabilities();
-      return HardwareCapabilitiesData(
-        supportsRawSensors: data.supportsRawSensors ?? false,
-        supportsFanControl: data.supportsFanControl ?? false,
-        hasFans: data.hasFans ?? false,
-        backend: data.backend ?? 'native-bridge',
-        note: data.note,
-      );
-    } on MissingPluginException {
-      return unavailableHardwareCapabilities(
+    return _loadWithFallback(
+      load: () async {
+        final data = await _api.getCapabilities();
+        return HardwareCapabilitiesData(
+          supportsRawSensors: data.supportsRawSensors ?? false,
+          supportsFanControl: data.supportsFanControl ?? false,
+          hasFans: data.hasFans ?? false,
+          backend: data.backend ?? 'native-bridge',
+          note: data.note,
+        );
+      },
+      onMissingPlugin: () => unavailableHardwareCapabilities(
         backend: 'pigeon-missing',
         note:
             'The native hardware bridge is not registered in this environment yet.',
-      );
-    } on PlatformException catch (error) {
-      return unavailableHardwareCapabilities(
+      ),
+      onPlatformError: (error) => unavailableHardwareCapabilities(
         backend: 'pigeon-error',
         note: 'Native capability probe failed: ${error.message ?? error.code}',
-      );
-    } catch (error) {
-      return unavailableHardwareCapabilities(
+      ),
+      onUnknownError: (error) => unavailableHardwareCapabilities(
         backend: 'pigeon-error',
         note: 'Native capability probe failed: $error',
-      );
-    }
+      ),
+    );
   }
 
   Future<HardwareSnapshotData> loadSnapshot() async {
-    try {
-      final data = await _api.getSnapshot();
-      return HardwareSnapshotData(
-        capturedAtEpochMs:
-            data.capturedAtEpochMs ?? DateTime.now().millisecondsSinceEpoch,
-        thermalState: data.thermalState ?? ThermalStateData.unknown,
-        sensors: List<SensorReadingData>.unmodifiable([
-          for (final sensor in data.sensors ?? const <SensorReadingData?>[])
-            if (sensor != null)
-              SensorReadingData(
-                id: sensor.id ?? 'sensor-${sensor.name ?? 'unknown'}',
-                name: sensor.name ?? 'Unnamed sensor',
-                unit: sensor.unit ?? '',
-                value: sensor.value ?? 0,
-                kind: sensor.kind ?? SensorKindData.other,
-              ),
-        ]),
-        fans: List<FanReadingData>.unmodifiable([
-          for (final fan in data.fans ?? const <FanReadingData?>[])
-            if (fan != null)
-              FanReadingData(
-                id: fan.id ?? 'fan-${fan.name ?? 'unknown'}',
-                name: fan.name ?? 'Unnamed fan',
-                currentRpm: fan.currentRpm ?? 0,
-                minimumRpm: fan.minimumRpm ?? 0,
-                maximumRpm: fan.maximumRpm ?? 0,
-                targetRpm: fan.targetRpm,
-                mode: fan.mode ?? FanModeData.automatic,
-              ),
-        ]),
-        note: data.note,
-      );
-    } on MissingPluginException {
-      return emptyHardwareSnapshot(
+    return _loadWithFallback(
+      load: () async {
+        final data = await _api.getSnapshot();
+
+        return HardwareSnapshotData(
+          capturedAtEpochMs:
+              data.capturedAtEpochMs ?? DateTime.now().millisecondsSinceEpoch,
+          thermalState: data.thermalState ?? ThermalStateData.unknown,
+          sensors: _normalizeSensors(data.sensors),
+          fans: _normalizeFans(data.fans),
+          note: data.note,
+        );
+      },
+      onMissingPlugin: () => emptyHardwareSnapshot(
         note:
             'The native hardware bridge is not registered in this environment yet.',
-      );
-    } on PlatformException catch (error) {
-      return emptyHardwareSnapshot(
+      ),
+      onPlatformError: (error) => emptyHardwareSnapshot(
         note: 'Telemetry refresh failed: ${error.message ?? error.code}',
-      );
-    } catch (error) {
-      return emptyHardwareSnapshot(note: 'Telemetry refresh failed: $error');
-    }
+      ),
+      onUnknownError: (error) =>
+          emptyHardwareSnapshot(note: 'Telemetry refresh failed: $error'),
+    );
   }
 
   Future<void> setFanMode(String fanId, FanModeData mode) async {
-    try {
-      await _api.setFanMode(fanId, mode);
-    } on PlatformException catch (error) {
-      throw StateError(error.message ?? error.code);
-    } catch (error) {
-      throw StateError(error.toString());
-    }
+    await _runCommand(() => _api.setFanMode(fanId, mode));
   }
 
   Future<void> setFanTargetRpm(String fanId, int targetRpm) async {
+    await _runCommand(() => _api.setFanTargetRpm(fanId, targetRpm));
+  }
+
+  Future<void> renewManualFanLease(String fanId) async {
+    await _runCommand(() => _api.renewManualFanLease(fanId));
+  }
+
+  Future<T> _loadWithFallback<T>({
+    required Future<T> Function() load,
+    required T Function() onMissingPlugin,
+    required T Function(PlatformException error) onPlatformError,
+    required T Function(Object error) onUnknownError,
+  }) async {
     try {
-      await _api.setFanTargetRpm(fanId, targetRpm);
+      return await load();
+    } on MissingPluginException {
+      return onMissingPlugin();
+    } on PlatformException catch (error) {
+      return onPlatformError(error);
+    } catch (error) {
+      return onUnknownError(error);
+    }
+  }
+
+  Future<void> _runCommand(Future<void> Function() action) async {
+    try {
+      await action();
     } on PlatformException catch (error) {
       throw StateError(error.message ?? error.code);
     } catch (error) {
@@ -134,13 +130,33 @@ class HardwareRepository {
     }
   }
 
-  Future<void> renewManualFanLease(String fanId) async {
-    try {
-      await _api.renewManualFanLease(fanId);
-    } on PlatformException catch (error) {
-      throw StateError(error.message ?? error.code);
-    } catch (error) {
-      throw StateError(error.toString());
-    }
+  List<SensorReadingData> _normalizeSensors(List<SensorReadingData?>? sensors) {
+    return List<SensorReadingData>.unmodifiable([
+      for (final sensor in sensors ?? const <SensorReadingData?>[])
+        if (sensor != null)
+          SensorReadingData(
+            id: sensor.stableId,
+            name: sensor.displayName,
+            unit: sensor.displayUnit,
+            value: sensor.numericValue,
+            kind: sensor.normalizedKind,
+          ),
+    ]);
+  }
+
+  List<FanReadingData> _normalizeFans(List<FanReadingData?>? fans) {
+    return List<FanReadingData>.unmodifiable([
+      for (final fan in fans ?? const <FanReadingData?>[])
+        if (fan != null)
+          FanReadingData(
+            id: fan.stableId,
+            name: fan.displayName,
+            currentRpm: fan.safeCurrentRpm,
+            minimumRpm: fan.safeMinimumRpm,
+            maximumRpm: fan.safeMaximumRpm,
+            targetRpm: fan.safeTargetRpm,
+            mode: fan.normalizedMode,
+          ),
+    ]);
   }
 }
