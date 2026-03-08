@@ -467,13 +467,15 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
   /// 状態ごとに登録、承認待ち、失敗を振り分けます。
   @available(macOS 13.0, *)
   private func ensureServiceReady(environment: ResolvedEnvironment) throws {
-    switch environment.service.status {
+    let service = environment.service
+
+    switch settledServiceStatus(for: service) {
     case .enabled:
       return
 
     case .notRegistered, .notFound:
       try registerService(environment: environment, allowReset: true)
-      try ensureRegisteredStatus(environment: environment)
+      try ensureRegisteredStatus(environment: environment, allowReset: true)
 
     case .requiresApproval:
       throw FanControlHelperClientError.requiresApproval
@@ -496,7 +498,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
     } catch {
       let nsError = error as NSError
 
-      if allowReset && shouldResetRegistration(status: environment.service.status, error: nsError) {
+      if allowReset && shouldResetRegistration(error: nsError) {
         try resetRegistration(environment: environment)
         try registerService(environment: environment, allowReset: false)
         return
@@ -507,11 +509,6 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
           message: registrationFailureMessage(for: nsError)
         )
       }
-    }
-
-    if allowReset && environment.service.status == .notFound {
-      try resetRegistration(environment: environment)
-      try registerService(environment: environment, allowReset: false)
     }
   }
 
@@ -532,15 +529,32 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
 
   /// 登録直後の状態が実際に利用可能かを再確認します。
   @available(macOS 13.0, *)
-  private func ensureRegisteredStatus(environment: ResolvedEnvironment) throws {
-    switch environment.service.status {
+  private func ensureRegisteredStatus(
+    environment: ResolvedEnvironment,
+    allowReset: Bool
+  ) throws {
+    let service = environment.service
+
+    switch settledServiceStatus(for: service) {
     case .enabled:
       return
     case .requiresApproval:
       throw FanControlHelperClientError.requiresApproval
     case .notFound:
+      if allowReset {
+        try resetRegistration(environment: environment)
+        try registerService(environment: environment, allowReset: false)
+        try ensureRegisteredStatus(environment: environment, allowReset: false)
+        return
+      }
       throw FanControlHelperClientError.helperUnavailable
     case .notRegistered:
+      if allowReset {
+        try resetRegistration(environment: environment)
+        try registerService(environment: environment, allowReset: false)
+        try ensureRegisteredStatus(environment: environment, allowReset: false)
+        return
+      }
       throw FanControlHelperClientError.registrationFailed(
         message: "macOS did not keep the privileged helper registered."
       )
@@ -554,16 +568,10 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
   /// 登録情報のリセットを試すべきエラーかどうかを判定します。
   @available(macOS 13.0, *)
   private func shouldResetRegistration(
-    status: SMAppService.Status,
     error: NSError
   ) -> Bool {
-    if status == .notFound {
-      return true
-    }
-
     switch error.code {
-    case kSMErrorAlreadyRegistered,
-      kSMErrorJobPlistNotFound,
+    case kSMErrorJobPlistNotFound,
       kSMErrorInvalidPlist,
       kSMErrorToolNotValid,
       kSMErrorInvalidSignature:
@@ -604,6 +612,20 @@ private struct SMAppServiceRecovery: FanControlServiceRecovering {
     }
 
     let service = environment.service
+    let settledStatus = settledServiceStatus(for: service)
+
+    switch settledStatus {
+    case .enabled:
+      return true
+    case .requiresApproval:
+      throw FanControlHelperClientError.requiresApproval
+    case .notRegistered, .notFound:
+      break
+    @unknown default:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "The privileged helper returned an unknown registration state."
+      )
+    }
 
     do {
       try service.unregister()
@@ -624,7 +646,7 @@ private struct SMAppServiceRecovery: FanControlServiceRecovering {
       )
     }
 
-    switch service.status {
+    switch settledServiceStatus(for: service) {
     case .enabled:
       return true
     case .requiresApproval:
@@ -658,6 +680,29 @@ private struct SMAppServiceRecovery: FanControlServiceRecovering {
       return error.localizedDescription
     }
   }
+}
+
+@available(macOS 13.0, *)
+private func settledServiceStatus(
+  for service: SMAppService,
+  maxPolls: Int = 20,
+  pollInterval: TimeInterval = 0.1
+) -> SMAppService.Status {
+  var status = service.status
+
+  for _ in 0..<maxPolls {
+    switch status {
+    case .enabled, .requiresApproval:
+      return status
+    case .notRegistered, .notFound:
+      Thread.sleep(forTimeInterval: pollInterval)
+      status = service.status
+    @unknown default:
+      return status
+    }
+  }
+
+  return status
 }
 
 private enum HelperServiceStatus {
