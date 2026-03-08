@@ -16,6 +16,22 @@ private struct NoOpServiceReadinessChecker: FanControlServiceReadinessChecking {
   func ensureReady(environment: ResolvedEnvironment) throws {}
 }
 
+private final class FlakyServiceReadinessChecker: FanControlServiceReadinessChecking {
+  private var remainingFailures: [FanControlHelperClientError]
+
+  init(failures: [FanControlHelperClientError]) {
+    remainingFailures = failures
+  }
+
+  func ensureReady(environment: ResolvedEnvironment) throws {
+    guard !remainingFailures.isEmpty else {
+      return
+    }
+
+    throw remainingFailures.removeFirst()
+  }
+}
+
 private struct NoOpServiceRecovery: FanControlServiceRecovering {
   func recover(environment: ResolvedEnvironment, after error: FanControlHelperClientError) throws
     -> Bool {
@@ -266,6 +282,36 @@ final class RunnerTests: XCTestCase {
       recovery.recoverCalls,
       [.connectionFailed("Timed out while waiting for the privileged helper.")]
     )
+  }
+
+  func testSetFanTargetRpmRetriesWhenHelperRegistrationIsStillSettling() throws {
+    var received: (fanIndex: Int, targetRpm: Int)?
+    let readinessChecker = FlakyServiceReadinessChecker(
+      failures: [
+        .helperUnavailable,
+        .registrationFailed(message: "macOS did not keep the privileged helper registered."),
+      ]
+    )
+    let connection = FakeFanControlConnection(
+      remote: FakeFanControlRemote(
+        applyManualTargetRpmHandler: { fanIndex, targetRpm, reply in
+          received = (fanIndex, targetRpm)
+          reply(nil)
+        }
+      )
+    )
+    let client = FanControlHelperClient(
+      commandTimeout: .seconds(1),
+      environmentResolver: { testEnvironment },
+      connectionFactory: { _ in connection },
+      serviceReadinessChecker: readinessChecker,
+      serviceRecovery: NoOpServiceRecovery(),
+      sleep: { _ in }
+    )
+
+    XCTAssertNoThrow(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450))
+    XCTAssertEqual(received?.fanIndex, 1)
+    XCTAssertEqual(received?.targetRpm, 2450)
   }
 
   func testRenewManualLeaseUsesHelperRenewCommand() throws {

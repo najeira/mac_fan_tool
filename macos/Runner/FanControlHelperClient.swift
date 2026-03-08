@@ -4,6 +4,11 @@ import ServiceManagement
 
 /// アプリ本体から特権ヘルパーの登録、接続、コマンド実行を仲介するクライアントです。
 final class FanControlHelperClient {
+  private enum ReadinessRetryPolicy {
+    static let retryCount = 3
+    static let retryDelay: TimeInterval = 0.2
+  }
+
   private enum ConnectionRecoveryPolicy {
     static let retryCountAfterRecovery = 3
     static let retryDelay: TimeInterval = 0.2
@@ -211,7 +216,7 @@ final class FanControlHelperClient {
     command: (FanControlXPCProtocol, @escaping (String?) -> Void, Int) -> Void
   ) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
-    let environment = try commandEnvironment()
+    let environment = try commandEnvironmentWithRetry()
 
     var hasRecovered = false
     var retriesRemaining = 0
@@ -242,6 +247,35 @@ final class FanControlHelperClient {
         retriesRemaining -= 1
         sleep(ConnectionRecoveryPolicy.retryDelay)
       }
+    }
+  }
+
+  private func commandEnvironmentWithRetry() throws -> ResolvedEnvironment {
+    var retriesRemaining = ReadinessRetryPolicy.retryCount
+
+    while true {
+      do {
+        return try commandEnvironment()
+      } catch let error as FanControlHelperClientError {
+        guard shouldRetryReadiness(after: error), retriesRemaining > 0 else {
+          throw error
+        }
+
+        retriesRemaining -= 1
+        sleep(ReadinessRetryPolicy.retryDelay)
+      }
+    }
+  }
+
+  private func shouldRetryReadiness(after error: FanControlHelperClientError) -> Bool {
+    switch error {
+    case .helperUnavailable:
+      return true
+    case let .registrationFailed(message):
+      return message == "macOS did not keep the privileged helper registered."
+        || message == "macOS could not find the helper registration after refreshing it."
+    default:
+      return false
     }
   }
 
