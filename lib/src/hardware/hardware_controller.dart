@@ -24,9 +24,12 @@ class MonitorController extends Notifier<MonitorState> {
   Timer? _pollTimer;
   Timer? _transientNoticeTimer;
   Timer? _manualLeaseHeartbeatTimer;
+
   bool _refreshInFlight = false;
   bool _manualLeaseRenewalInFlight = false;
+
   bool _isDisposed = false;
+
   final Set<String> _manualLeaseFanIds = <String>{};
 
   HardwareRepository get _repository => ref.read(hardwareRepositoryProvider);
@@ -51,7 +54,9 @@ class MonitorController extends Notifier<MonitorState> {
       _manualLeaseHeartbeatTimer = null;
       _manualLeaseFanIds.clear();
     });
+
     unawaited(_bootstrap());
+
     return MonitorState.initial();
   }
 
@@ -61,7 +66,6 @@ class MonitorController extends Notifier<MonitorState> {
         _repository.loadDeviceMetadata(),
         _repository.loadCapabilities(),
       ]);
-
       if (_isDisposed) {
         return;
       }
@@ -100,7 +104,6 @@ class MonitorController extends Notifier<MonitorState> {
     if (_refreshInFlight) {
       return true;
     }
-
     _refreshInFlight = true;
 
     try {
@@ -121,9 +124,7 @@ class MonitorController extends Notifier<MonitorState> {
         return false;
       }
 
-      state = state.copyWith(
-        errorMessage: 'Telemetry refresh failed: $error',
-      );
+      state = state.copyWith(errorMessage: 'Telemetry refresh failed: $error');
       return false;
     } finally {
       _refreshInFlight = false;
@@ -133,12 +134,6 @@ class MonitorController extends Notifier<MonitorState> {
   Future<void> setFanAutomatic(FanReadingData fan) async {
     final fanId = fan.id;
     if (fanId == null || fanId.isEmpty) {
-      _showTransientNotice(
-        const MonitorNotice(
-          tone: MonitorNoticeTone.error,
-          message: 'Fan command failed: missing fan id.',
-        ),
-      );
       return;
     }
 
@@ -153,12 +148,6 @@ class MonitorController extends Notifier<MonitorState> {
   Future<void> setFanTargetRpm(FanReadingData fan, int targetRpm) async {
     final fanId = fan.id;
     if (fanId == null || fanId.isEmpty) {
-      _showTransientNotice(
-        const MonitorNotice(
-          tone: MonitorNoticeTone.error,
-          message: 'Fan command failed: missing fan id.',
-        ),
-      );
       return;
     }
 
@@ -192,6 +181,7 @@ class MonitorController extends Notifier<MonitorState> {
       }
 
       onActionApplied?.call();
+
       final refreshSucceeded = await refresh();
       if (_isDisposed) {
         return;
@@ -200,6 +190,7 @@ class MonitorController extends Notifier<MonitorState> {
       state = state.copyWith(
         activeFanCommandIds: _removeActiveFanCommandId(fanId),
       );
+
       _showTransientNotice(
         MonitorNotice(
           tone: refreshSucceeded
@@ -218,6 +209,7 @@ class MonitorController extends Notifier<MonitorState> {
       state = state.copyWith(
         activeFanCommandIds: _removeActiveFanCommandId(fanId),
       );
+
       _showTransientNotice(
         MonitorNotice(
           tone: MonitorNoticeTone.error,
@@ -255,12 +247,11 @@ class MonitorController extends Notifier<MonitorState> {
 
   List<HardwareSnapshotData> _appendHistory(HardwareSnapshotData snapshot) {
     final nextHistory = <HardwareSnapshotData>[...state.history, snapshot];
-
-    if (nextHistory.length <= 90) {
+    final overflow = nextHistory.length - 90;
+    if (overflow <= 0) {
       return nextHistory;
     }
-
-    return nextHistory.sublist(nextHistory.length - 90);
+    return nextHistory.sublist(overflow);
   }
 
   Set<String> _removeActiveFanCommandId(String fanId) {
