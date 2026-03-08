@@ -8,28 +8,24 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_ref.dart';
 class DebugFlags {
   const DebugFlags({
     this.showBootstrapping = false,
-    this.showRefreshing = false,
     this.showError = false,
     this.showSuccess = false,
     this.showHardwareNote = false,
   });
 
   final bool showBootstrapping;
-  final bool showRefreshing;
   final bool showError;
   final bool showSuccess;
   final bool showHardwareNote;
 
   DebugFlags copyWith({
     bool? showBootstrapping,
-    bool? showRefreshing,
     bool? showError,
     bool? showSuccess,
     bool? showHardwareNote,
   }) {
     return DebugFlags(
       showBootstrapping: showBootstrapping ?? this.showBootstrapping,
-      showRefreshing: showRefreshing ?? this.showRefreshing,
       showError: showError ?? this.showError,
       showSuccess: showSuccess ?? this.showSuccess,
       showHardwareNote: showHardwareNote ?? this.showHardwareNote,
@@ -38,7 +34,6 @@ class DebugFlags {
 
   bool get isEmpty {
     return !showBootstrapping &&
-        !showRefreshing &&
         !showError &&
         !showSuccess &&
         !showHardwareNote;
@@ -57,10 +52,6 @@ class DebugFlagsController extends Notifier<DebugFlags> {
 
   void toggleBootstrapping() {
     state = state.copyWith(showBootstrapping: !state.showBootstrapping);
-  }
-
-  void toggleRefreshing() {
-    state = state.copyWith(showRefreshing: !state.showRefreshing);
   }
 
   void toggleError() {
@@ -124,11 +115,6 @@ class DebugPanel extends ConsumerWidget {
                 label: const Text('Bootstrapping'),
                 selected: flags.showBootstrapping,
                 onSelected: (_) => ref.debugFlagsActions.toggleBootstrapping(),
-              ),
-              FilterChip(
-                label: const Text('Refreshing'),
-                selected: flags.showRefreshing,
-                onSelected: (_) => ref.debugFlagsActions.toggleRefreshing(),
               ),
               FilterChip(
                 label: const Text('Error Banner'),

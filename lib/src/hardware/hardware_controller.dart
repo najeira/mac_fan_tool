@@ -28,20 +28,19 @@ class MonitorController extends Notifier<MonitorState> {
   bool _manualLeaseRenewalInFlight = false;
   bool _isDisposed = false;
   final Set<String> _manualLeaseFanIds = <String>{};
-  late HardwareRepository _repositoryCache;
-  Duration _transientNoticeDuration = const Duration(seconds: 4);
-  Duration _manualLeaseHeartbeatInterval = const Duration(seconds: 30);
 
-  HardwareRepository get _repository => _repositoryCache;
+  HardwareRepository get _repository => ref.read(hardwareRepositoryProvider);
+
+  Duration get _transientNoticeDuration =>
+      ref.read(transientNoticeDurationProvider);
+
+  Duration get _manualLeaseHeartbeatInterval =>
+      ref.read(manualLeaseHeartbeatIntervalProvider);
 
   @override
   MonitorState build() {
     _isDisposed = false;
-    _repositoryCache = ref.read(hardwareRepositoryProvider);
-    _transientNoticeDuration = ref.read(transientNoticeDurationProvider);
-    _manualLeaseHeartbeatInterval = ref.read(
-      manualLeaseHeartbeatIntervalProvider,
-    );
+
     ref.onDispose(() {
       _isDisposed = true;
       _pollTimer?.cancel();
@@ -73,13 +72,13 @@ class MonitorController extends Notifier<MonitorState> {
         isBootstrapping: false,
       );
 
-      await refresh(showSpinner: false);
+      await refresh();
       if (_isDisposed) {
         return;
       }
 
       _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-        unawaited(refresh(showSpinner: false));
+        unawaited(refresh());
       });
     } catch (error) {
       if (_isDisposed) {
@@ -93,7 +92,7 @@ class MonitorController extends Notifier<MonitorState> {
     }
   }
 
-  Future<bool> refresh({bool showSpinner = true}) async {
+  Future<bool> refresh() async {
     if (_isDisposed) {
       return false;
     }
@@ -103,7 +102,6 @@ class MonitorController extends Notifier<MonitorState> {
     }
 
     _refreshInFlight = true;
-    state = state.copyWith(isRefreshing: showSpinner);
 
     try {
       final snapshot = await _repository.loadSnapshot();
@@ -114,7 +112,6 @@ class MonitorController extends Notifier<MonitorState> {
       state = state.copyWith(
         snapshot: snapshot,
         history: _appendHistory(snapshot),
-        isRefreshing: false,
         errorMessage: null,
       );
       _pruneManualLeaseFanIds(snapshot);
@@ -125,7 +122,6 @@ class MonitorController extends Notifier<MonitorState> {
       }
 
       state = state.copyWith(
-        isRefreshing: false,
         errorMessage: 'Telemetry refresh failed: $error',
       );
       return false;
@@ -196,7 +192,7 @@ class MonitorController extends Notifier<MonitorState> {
       }
 
       onActionApplied?.call();
-      final refreshSucceeded = await refresh(showSpinner: false);
+      final refreshSucceeded = await refresh();
       if (_isDisposed) {
         return;
       }

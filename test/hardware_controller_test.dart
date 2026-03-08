@@ -274,7 +274,7 @@ void main() {
 
     final refreshFuture = container
         .read(monitorControllerProvider.notifier)
-        .refresh(showSpinner: false);
+        .refresh();
     await Future<void>.delayed(Duration.zero);
 
     expect(

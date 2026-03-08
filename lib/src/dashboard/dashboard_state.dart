@@ -44,17 +44,6 @@ final monitorCapabilitiesProvider = Provider<HardwareCapabilitiesData>((ref) {
   );
 });
 
-final monitorIsRefreshingProvider = Provider<bool>((ref) {
-  final debugFlags = ref.watch(debugFlagsProvider);
-  if (debugFlags.showRefreshing) {
-    return true;
-  }
-
-  return ref.watch(
-    monitorControllerProvider.select((state) => state.isRefreshing),
-  );
-});
-
 final monitorIsBootstrappingProvider = Provider<bool>((ref) {
   final debugFlags = ref.watch(debugFlagsProvider);
   if (debugFlags.showBootstrapping) {

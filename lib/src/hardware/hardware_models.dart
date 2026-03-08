@@ -125,7 +125,6 @@ class MonitorState {
     required this.snapshot,
     required this.history,
     required this.isBootstrapping,
-    required this.isRefreshing,
     Set<String> activeFanCommandIds = const <String>{},
     this.errorMessage,
     this.transientNotice,
@@ -140,7 +139,6 @@ class MonitorState {
       ),
       history: <HardwareSnapshotData>[],
       isBootstrapping: true,
-      isRefreshing: false,
     );
   }
 
@@ -151,7 +149,6 @@ class MonitorState {
   final HardwareSnapshotData snapshot;
   final List<HardwareSnapshotData> history;
   final bool isBootstrapping;
-  final bool isRefreshing;
   final Set<String> activeFanCommandIds;
   final String? errorMessage;
   final MonitorNotice? transientNotice;
@@ -162,7 +159,6 @@ class MonitorState {
     HardwareSnapshotData? snapshot,
     List<HardwareSnapshotData>? history,
     bool? isBootstrapping,
-    bool? isRefreshing,
     Set<String>? activeFanCommandIds,
     Object? errorMessage = _sentinel,
     Object? transientNotice = _sentinel,
@@ -173,7 +169,6 @@ class MonitorState {
       snapshot: snapshot ?? this.snapshot,
       history: history ?? this.history,
       isBootstrapping: isBootstrapping ?? this.isBootstrapping,
-      isRefreshing: isRefreshing ?? this.isRefreshing,
       activeFanCommandIds: activeFanCommandIds ?? this.activeFanCommandIds,
       errorMessage: identical(errorMessage, _sentinel)
           ? this.errorMessage
