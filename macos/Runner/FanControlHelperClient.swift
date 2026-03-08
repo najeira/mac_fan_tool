@@ -12,17 +12,20 @@ final class FanControlHelperClient {
   private let environmentResolver: EnvironmentResolver?
   private let connectionFactory: ConnectionFactory?
   private let serviceReadinessChecker: FanControlServiceReadinessChecking
+  private let serviceRecovery: FanControlServiceRecovering
 
   init(
     commandTimeout: DispatchTimeInterval = .seconds(10),
     environmentResolver: EnvironmentResolver? = nil,
     connectionFactory: ConnectionFactory? = nil,
-    serviceReadinessChecker: FanControlServiceReadinessChecking = SMAppServiceReadinessChecker()
+    serviceReadinessChecker: FanControlServiceReadinessChecking = SMAppServiceReadinessChecker(),
+    serviceRecovery: FanControlServiceRecovering = SMAppServiceRecovery()
   ) {
     self.commandTimeout = commandTimeout
     self.environmentResolver = environmentResolver
     self.connectionFactory = connectionFactory
     self.serviceReadinessChecker = serviceReadinessChecker
+    self.serviceRecovery = serviceRecovery
   }
 
   /// 現在の環境でファン制御 UI を有効化してよいかを判定します。
@@ -200,8 +203,18 @@ final class FanControlHelperClient {
   ) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
     let environment = try commandEnvironment()
-    try performCommand(environment: environment) { remote, reply in
-      command(remote, reply, fanIndex)
+    do {
+      try performCommand(environment: environment) { remote, reply in
+        command(remote, reply, fanIndex)
+      }
+    } catch let error as FanControlHelperClientError {
+      guard try serviceRecovery.recover(environment: environment, after: error) else {
+        throw error
+      }
+
+      try performCommand(environment: environment) { remote, reply in
+        command(remote, reply, fanIndex)
+      }
     }
   }
 
@@ -434,6 +447,13 @@ protocol FanControlServiceReadinessChecking {
   func ensureReady(environment: ResolvedEnvironment) throws
 }
 
+/// 接続失敗後に既存の helper 登録を再作成し、再試行可否を返す抽象化です。
+protocol FanControlServiceRecovering {
+  /// 復旧処理を行い、呼び出し元が 1 回だけ再試行してよいかを返します。
+  func recover(environment: ResolvedEnvironment, after error: FanControlHelperClientError) throws
+    -> Bool
+}
+
 private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking {
   /// ServiceManagement の登録・承認状態を検査し、必要なら登録処理を進めます。
   func ensureReady(environment: ResolvedEnvironment) throws {
@@ -554,6 +574,74 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
   }
 
   /// ServiceManagement の `NSError` をユーザー向けメッセージへ変換します。
+  private func registrationFailureMessage(for error: NSError) -> String {
+    switch error.code {
+    case kSMErrorInvalidSignature:
+      return "The app or bundled helper is not signed in a way that ServiceManagement accepts."
+    case kSMErrorAuthorizationFailure:
+      return "macOS refused the authorization needed to register the privileged helper."
+    case kSMErrorToolNotValid, kSMErrorJobPlistNotFound, kSMErrorInvalidPlist:
+      return "The bundled privileged helper could not be validated by macOS."
+    case kSMErrorJobNotFound:
+      return "macOS could not find the helper registration after refreshing it."
+    case kSMErrorLaunchDeniedByUser:
+      return FanControlHelperClientError.requiresApproval.message
+    default:
+      return error.localizedDescription
+    }
+  }
+}
+
+private struct SMAppServiceRecovery: FanControlServiceRecovering {
+  func recover(environment: ResolvedEnvironment, after error: FanControlHelperClientError) throws
+    -> Bool {
+    guard case .connectionFailed = error else {
+      return false
+    }
+
+    guard #available(macOS 13.0, *) else {
+      return false
+    }
+
+    let service = environment.service
+
+    do {
+      try service.unregister()
+    } catch {
+      let nsError = error as NSError
+      if nsError.code != kSMErrorJobNotFound {
+        throw FanControlHelperClientError.registrationFailed(
+          message: registrationFailureMessage(for: nsError)
+        )
+      }
+    }
+
+    do {
+      try service.register()
+    } catch {
+      throw FanControlHelperClientError.registrationFailed(
+        message: registrationFailureMessage(for: error as NSError)
+      )
+    }
+
+    switch service.status {
+    case .enabled:
+      return true
+    case .requiresApproval:
+      throw FanControlHelperClientError.requiresApproval
+    case .notFound:
+      throw FanControlHelperClientError.helperUnavailable
+    case .notRegistered:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "macOS did not keep the privileged helper registered after reconnecting it."
+      )
+    @unknown default:
+      throw FanControlHelperClientError.registrationFailed(
+        message: "The privileged helper returned an unknown registration state."
+      )
+    }
+  }
+
   private func registrationFailureMessage(for error: NSError) -> String {
     switch error.code {
     case kSMErrorInvalidSignature:

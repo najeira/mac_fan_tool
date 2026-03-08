@@ -15,6 +15,28 @@ private struct NoOpServiceReadinessChecker: FanControlServiceReadinessChecking {
   func ensureReady(environment: ResolvedEnvironment) throws {}
 }
 
+private struct NoOpServiceRecovery: FanControlServiceRecovering {
+  func recover(environment: ResolvedEnvironment, after error: FanControlHelperClientError) throws
+    -> Bool {
+    false
+  }
+}
+
+private final class OneShotServiceRecovery: FanControlServiceRecovering {
+  private(set) var recoverCalls: [FanControlHelperClientError] = []
+  private let shouldRecover: Bool
+
+  init(shouldRecover: Bool = true) {
+    self.shouldRecover = shouldRecover
+  }
+
+  func recover(environment: ResolvedEnvironment, after error: FanControlHelperClientError) throws
+    -> Bool {
+    recoverCalls.append(error)
+    return shouldRecover
+  }
+}
+
 final class RunnerTests: XCTestCase {
   func testCodeSigningRequirementBuilderIncludesAnchorAndTeam() {
     XCTAssertEqual(
@@ -137,6 +159,68 @@ final class RunnerTests: XCTestCase {
     XCTAssertNoThrow(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450))
     XCTAssertEqual(received?.fanIndex, 1)
     XCTAssertEqual(received?.targetRpm, 2450)
+  }
+
+  func testSetFanTargetRpmRetriesAfterRecoverableConnectionFailure() throws {
+    let timedOutConnection = FakeFanControlConnection(
+      remote: FakeFanControlRemote(
+        applyManualTargetRpmHandler: { _, _, _ in }
+      )
+    )
+    let recoveredConnection = FakeFanControlConnection(
+      remote: FakeFanControlRemote(
+        applyManualTargetRpmHandler: { _, targetRpm, reply in
+          XCTAssertEqual(targetRpm, 2450)
+          reply(nil)
+        }
+      )
+    )
+    let recovery = OneShotServiceRecovery()
+    var connectionAttempts = 0
+    let client = FanControlHelperClient(
+      commandTimeout: .milliseconds(50),
+      environmentResolver: { testEnvironment },
+      connectionFactory: { _ in
+        defer { connectionAttempts += 1 }
+        return connectionAttempts == 0 ? timedOutConnection : recoveredConnection
+      },
+      serviceReadinessChecker: NoOpServiceReadinessChecker(),
+      serviceRecovery: recovery
+    )
+
+    XCTAssertNoThrow(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450))
+    XCTAssertEqual(connectionAttempts, 2)
+    XCTAssertEqual(
+      recovery.recoverCalls,
+      [.connectionFailed("Timed out while waiting for the privileged helper.")]
+    )
+  }
+
+  func testSetFanTargetRpmDoesNotRetryWhenRecoveryDeclines() {
+    let connection = FakeFanControlConnection(
+      remote: FakeFanControlRemote(
+        applyManualTargetRpmHandler: { _, _, _ in }
+      )
+    )
+    let recovery = OneShotServiceRecovery(shouldRecover: false)
+    let client = FanControlHelperClient(
+      commandTimeout: .milliseconds(50),
+      environmentResolver: { testEnvironment },
+      connectionFactory: { _ in connection },
+      serviceReadinessChecker: NoOpServiceReadinessChecker(),
+      serviceRecovery: recovery
+    )
+
+    XCTAssertThrowsError(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450)) { error in
+      XCTAssertEqual(
+        error as? FanControlHelperClientError,
+        .connectionFailed("Timed out while waiting for the privileged helper.")
+      )
+    }
+    XCTAssertEqual(
+      recovery.recoverCalls,
+      [.connectionFailed("Timed out while waiting for the privileged helper.")]
+    )
   }
 
   func testRenewManualLeaseUsesHelperRenewCommand() throws {
@@ -402,7 +486,7 @@ private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
   private let renewManualLeaseHandler: RenewManualLeaseHandler
 
   init(
-    setFanModeHandler: @escaping FanModeHandler,
+    setFanModeHandler: @escaping FanModeHandler = { _, _, reply in reply(nil) },
     applyManualTargetRpmHandler: @escaping ApplyManualTargetHandler = { _, _, reply in reply(nil) },
     renewManualLeaseHandler: @escaping RenewManualLeaseHandler = { _, reply in reply(nil) }
   ) {
