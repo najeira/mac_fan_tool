@@ -536,7 +536,7 @@ private final class AppleSiliconHardwareMonitor {
       let targetRpm = target.map { Int($0.rounded()) }
       let manualOverrideEnabled =
         forcedFanMask.map { ($0 & (UInt32(1) << UInt32(index))) != 0 } ?? false
-      let isManual = modeValue.map { $0 > 0 } ?? manualOverrideEnabled
+      let isManual = manualOverrideEnabled || (modeValue.map { $0 > 0 } ?? false)
 
       fans.append(
         FanReadingData(

@@ -282,6 +282,29 @@ final class RunnerTests: XCTestCase {
     XCTAssertTrue(smc.writeLog.isEmpty)
   }
 
+  func testAppleSMCFanControllerAcceptsManualWhenForceMaskSetsButModeKeyStaysZero() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+      ],
+      integerValues: [
+        "F0Md": 0,
+        "FS! ": 0,
+      ],
+      numericWritableKeys: [],
+      integerWritableKeys: ["F0Md", "FS! "]
+    )
+    smc.integerWriteBehaviors["F0Md"] = { _ in 0 }
+    let controller = AppleSMCFanController(
+      smc: smc,
+      platform: TestFanControlPlatform(isAppleSilicon: true)
+    )
+
+    XCTAssertNoThrow(try controller.setFanMode(index: 0, mode: .manual))
+    XCTAssertEqual(smc.integerValues["F0Md"], 0)
+    XCTAssertEqual(smc.integerValues["FS! "], 1)
+  }
+
   func testAppleSMCFanControllerRollsBackModeAndTargetWhenTargetVerificationFails() {
     let smc = FakeAppleSMC(
       numericValues: [

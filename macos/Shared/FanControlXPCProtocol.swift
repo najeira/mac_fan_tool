@@ -492,25 +492,33 @@ final class AppleSMCFanController: FanControlControlling {
     using capabilities: FanModeWriteCapabilities
   ) throws {
     let expectsManual = mode == .manual
+    let actualModeValue =
+      capabilities.writesModeKey
+      ? try readIntegerKey(capabilities.modeKey, allowZero: true)
+      : nil
+    let actualForceMask =
+      capabilities.writesForceMask
+      ? try readIntegerKey(capabilities.forceKey, allowZero: true)
+      : nil
+    let observedManualStates = [
+      actualModeValue.map { $0 > 0 },
+      actualForceMask.map { ($0 & capabilities.maskBit) != 0 },
+    ].compactMap { $0 }
 
-    if capabilities.writesModeKey {
-      let actualModeValue = try readIntegerKey(capabilities.modeKey, allowZero: true)
-      guard (actualModeValue > 0) == expectsManual else {
-        throw AppleSMCFanControlError.verificationFailed(
-          "expected \(capabilities.modeKey) to indicate \(mode), but read back \(actualModeValue)"
-        )
-      }
+    guard !observedManualStates.isEmpty else {
+      throw AppleSMCFanControlError.modeControlUnavailable(capabilities.index)
     }
 
-    if capabilities.writesForceMask {
-      let actualForceMask = try readIntegerKey(capabilities.forceKey, allowZero: true)
-      let isManual = (actualForceMask & capabilities.maskBit) != 0
-      guard isManual == expectsManual else {
-        let expectedState = expectsManual ? "set" : "cleared"
-        throw AppleSMCFanControlError.verificationFailed(
-          "expected \(capabilities.forceKey) bit \(capabilities.index) to be \(expectedState), but read back \(actualForceMask)"
-        )
-      }
+    let verificationSucceeded =
+      expectsManual
+      ? observedManualStates.contains(true)
+      : observedManualStates.allSatisfy { $0 == false }
+    guard verificationSucceeded else {
+      let modeDescription = actualModeValue.map(String.init) ?? "n/a"
+      let forceDescription = actualForceMask.map(String.init) ?? "n/a"
+      throw AppleSMCFanControlError.verificationFailed(
+        "expected fan \(capabilities.index) to indicate \(mode), but read back \(capabilities.modeKey)=\(modeDescription), \(capabilities.forceKey)=\(forceDescription)"
+      )
     }
   }
 
