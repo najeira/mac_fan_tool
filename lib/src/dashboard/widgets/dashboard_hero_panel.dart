@@ -116,13 +116,14 @@ class _OverallTemperatureChip extends ConsumerWidget {
     final overallTemperature = ref.watch(
       summaryProvider.select((summary) => summary.overallTemperature),
     );
-    final assessment = ref.watch(appThermalAssessmentProvider);
+    final thermalLevel = ref.watch(
+      appThermalAssessmentProvider.select((assessment) => assessment.level),
+    );
 
     return PillChip(
       icon: Icons.device_thermostat,
-      label:
-          '${formatTemperature(overallTemperature)} ${appThermalLabel(assessment.level)}',
-      color: appThermalChipColor(assessment.level),
+      label: formatTemperature(overallTemperature),
+      color: appThermalChipColor(thermalLevel),
       foreground: Theme.of(context).colorScheme.onPrimary,
     );
   }
