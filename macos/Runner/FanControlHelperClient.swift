@@ -568,7 +568,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
 
       if nsError.code != kSMErrorAlreadyRegistered {
         throw FanControlHelperClientError.registrationFailed(
-          message: registrationFailureMessage(for: nsError)
+          message: smAppServiceRegistrationFailureMessage(for: nsError)
         )
       }
     }
@@ -578,14 +578,11 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
   @available(macOS 13.0, *)
   private func resetRegistration(environment: ResolvedEnvironment) throws {
     do {
-      try unregisterServiceAndWait(environment.service)
+      try unregisterServiceIfPresent(environment.service)
     } catch {
-      let nsError = error as NSError
-      if nsError.code != kSMErrorJobNotFound {
-        throw FanControlHelperClientError.registrationFailed(
-          message: registrationFailureMessage(for: nsError)
-        )
-      }
+      throw FanControlHelperClientError.registrationFailed(
+        message: smAppServiceRegistrationFailureMessage(for: error as NSError)
+      )
     }
   }
 
@@ -650,24 +647,6 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
       return false
     }
   }
-
-  /// ServiceManagement の `NSError` をユーザー向けメッセージへ変換します。
-  private func registrationFailureMessage(for error: NSError) -> String {
-    switch error.code {
-    case kSMErrorInvalidSignature:
-      return "The app or bundled helper is not signed in a way that ServiceManagement accepts."
-    case kSMErrorAuthorizationFailure:
-      return "macOS refused the authorization needed to register the privileged helper."
-    case kSMErrorToolNotValid, kSMErrorJobPlistNotFound, kSMErrorInvalidPlist:
-      return "The bundled privileged helper could not be validated by macOS."
-    case kSMErrorJobNotFound:
-      return "macOS could not find the helper registration after refreshing it."
-    case kSMErrorLaunchDeniedByUser:
-      return FanControlHelperClientError.requiresApproval.message
-    default:
-      return error.localizedDescription
-    }
-  }
 }
 
 private struct SMAppServiceRecovery: FanControlServiceRecovering {
@@ -698,21 +677,18 @@ private struct SMAppServiceRecovery: FanControlServiceRecovering {
     }
 
     do {
-      try unregisterServiceAndWait(service)
+      try unregisterServiceIfPresent(service)
     } catch {
-      let nsError = error as NSError
-      if nsError.code != kSMErrorJobNotFound {
-        throw FanControlHelperClientError.registrationFailed(
-          message: registrationFailureMessage(for: nsError)
-        )
-      }
+      throw FanControlHelperClientError.registrationFailed(
+        message: smAppServiceRegistrationFailureMessage(for: error as NSError)
+      )
     }
 
     do {
       try service.register()
     } catch {
       throw FanControlHelperClientError.registrationFailed(
-        message: registrationFailureMessage(for: error as NSError)
+        message: smAppServiceRegistrationFailureMessage(for: error as NSError)
       )
     }
 
@@ -731,23 +707,6 @@ private struct SMAppServiceRecovery: FanControlServiceRecovering {
       throw FanControlHelperClientError.registrationFailed(
         message: "The privileged helper returned an unknown registration state."
       )
-    }
-  }
-
-  private func registrationFailureMessage(for error: NSError) -> String {
-    switch error.code {
-    case kSMErrorInvalidSignature:
-      return "The app or bundled helper is not signed in a way that ServiceManagement accepts."
-    case kSMErrorAuthorizationFailure:
-      return "macOS refused the authorization needed to register the privileged helper."
-    case kSMErrorToolNotValid, kSMErrorJobPlistNotFound, kSMErrorInvalidPlist:
-      return "The bundled privileged helper could not be validated by macOS."
-    case kSMErrorJobNotFound:
-      return "macOS could not find the helper registration after refreshing it."
-    case kSMErrorLaunchDeniedByUser:
-      return FanControlHelperClientError.requiresApproval.message
-    default:
-      return error.localizedDescription
     }
   }
 }
@@ -778,6 +737,35 @@ private func unregisterServiceAndWait(
 
   if let completionError {
     throw completionError
+  }
+}
+
+@available(macOS 13.0, *)
+private func unregisterServiceIfPresent(_ service: SMAppService) throws {
+  do {
+    try unregisterServiceAndWait(service)
+  } catch {
+    let nsError = error as NSError
+    if nsError.code != kSMErrorJobNotFound {
+      throw error
+    }
+  }
+}
+
+private func smAppServiceRegistrationFailureMessage(for error: NSError) -> String {
+  switch error.code {
+  case kSMErrorInvalidSignature:
+    return "The app or bundled helper is not signed in a way that ServiceManagement accepts."
+  case kSMErrorAuthorizationFailure:
+    return "macOS refused the authorization needed to register the privileged helper."
+  case kSMErrorToolNotValid, kSMErrorJobPlistNotFound, kSMErrorInvalidPlist:
+    return "The bundled privileged helper could not be validated by macOS."
+  case kSMErrorJobNotFound:
+    return "macOS could not find the helper registration after refreshing it."
+  case kSMErrorLaunchDeniedByUser:
+    return FanControlHelperClientError.requiresApproval.message
+  default:
+    return error.localizedDescription
   }
 }
 

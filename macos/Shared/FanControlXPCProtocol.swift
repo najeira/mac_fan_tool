@@ -298,22 +298,12 @@ final class AppleSMCFanController: FanControlControlling {
     try validateWritableFanTarget(index: index, targetRpm: targetRpm)
     let modeSnapshot = try captureModeSnapshot(for: index)
     let targetSnapshot = try captureTargetSnapshot(for: index)
-    do {
-      try performFanWrite {
-        try writeMode(.manual, using: modeSnapshot.capabilities)
-        try writeTarget(targetRpm, for: index)
-      } rollback: {
-        try restoreTargetSnapshot(targetSnapshot)
-        try restoreModeSnapshot(modeSnapshot)
-      }
-    } catch let error as AppleSMCFanControlError {
-      guard shouldFallbackToLegacyTargetWrite(after: error) else {
-        throw error
-      }
-
-      // Some Macs accept the target write but reject or lag the combined
-      // manual+target transition. Preserve the pre-88a163 behavior as a fallback.
-      try setFanTargetRpm(index: index, targetRpm: targetRpm)
+    try performFanWrite {
+      try writeMode(.manual, using: modeSnapshot.capabilities)
+      try writeTarget(targetRpm, for: index)
+    } rollback: {
+      try restoreTargetSnapshot(targetSnapshot)
+      try restoreModeSnapshot(modeSnapshot)
     }
   }
 
@@ -383,15 +373,6 @@ final class AppleSMCFanController: FanControlControlling {
         maximum: bounds.maximumRpm
       )
     }
-  }
-
-  /// atomic manual apply が verification で落ちたときだけ legacy target-only 経路を試します。
-  private func shouldFallbackToLegacyTargetWrite(after error: AppleSMCFanControlError) -> Bool {
-    if case .verificationFailed = error {
-      return true
-    }
-
-    return false
   }
 
   /// ファン書き込み処理を実行し、失敗時は呼び出し元が渡したロールバックを試行します。

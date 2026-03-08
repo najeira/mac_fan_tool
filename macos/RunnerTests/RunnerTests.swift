@@ -340,10 +340,7 @@ final class RunnerTests: XCTestCase {
       integerWritableKeys: ["F0Md", "FS! "]
     )
     smc.integerWriteBehaviors["F0Md"] = { _ in 1 }
-    let controller = AppleSMCFanController(
-      smc: smc,
-      platform: TestFanControlPlatform(isAppleSilicon: true)
-    )
+    let controller = makeTestAppleSMCFanController(smc: smc)
 
     XCTAssertNoThrow(try controller.setFanMode(index: 0, mode: .automatic))
     XCTAssertEqual(smc.integerValues["F0Md"], 1)
@@ -376,30 +373,6 @@ final class RunnerTests: XCTestCase {
     XCTAssertNoThrow(try controller.applyManualTargetRpm(index: 0, targetRpm: 2100))
     XCTAssertEqual(targetWrites, 2)
     XCTAssertEqual(smc.numericValues["F0Tg"], 2100)
-  }
-
-  func testAppleSMCFanControllerFallsBackToLegacyTargetWriteWhenAtomicApplyVerificationFails() {
-    let smc = FakeAppleSMC(
-      numericValues: [
-        "FNum": 1,
-        "F0Ac": 2200,
-        "F0Mn": 1200,
-        "F0Mx": 4000,
-        "F0Tg": 1000,
-      ],
-      integerValues: [
-        "F0Md": 0,
-        "FS! ": 0,
-      ],
-      numericWritableKeys: ["F0Tg"],
-      integerWritableKeys: ["F0Md", "FS! "]
-    )
-    smc.integerWriteBehaviors["FS! "] = { _ in 0 }
-    let controller = makeTestAppleSMCFanController(smc: smc)
-
-    XCTAssertNoThrow(try controller.applyManualTargetRpm(index: 0, targetRpm: 2100))
-    XCTAssertEqual(smc.numericValues["F0Tg"], 2100)
-    XCTAssertEqual(smc.integerValues["FS! "], 0)
   }
 
   func testAppleSMCFanControllerDoesNotTreatModeKeyOnlyRollbackReadbackAsFailure() {
