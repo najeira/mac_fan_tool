@@ -18,6 +18,7 @@ struct FanControlHelperConfiguration {
     "\(appBundleIdentifier)\(Self.machServiceSuffix)"
   }
 
+  /// 現在の実行バンドルからアプリ本体用の設定値を組み立てます。
   static func currentAppConfiguration(bundle: Bundle = .main) -> FanControlHelperConfiguration? {
     guard let appBundleIdentifier = appBundleIdentifier(for: bundle) else {
       return nil
@@ -26,6 +27,7 @@ struct FanControlHelperConfiguration {
     return FanControlHelperConfiguration(appBundleIdentifier: appBundleIdentifier)
   }
 
+  /// ヘルパー実行時でもアプリ本体のバンドル ID を逆算して返します。
   static func appBundleIdentifier(for bundle: Bundle) -> String? {
     guard let bundleIdentifier = bundle.bundleIdentifier, !bundleIdentifier.isEmpty else {
       return nil
@@ -79,6 +81,7 @@ final class ManualFanLeaseController {
   private let expirationHandler: ExpirationHandler
   private var timers: [Int: DispatchSourceTimer] = [:]
 
+  /// リース継続時間と満了時のコールバックを受け取ってタイマー管理を初期化します。
   init(
     duration: DispatchTimeInterval,
     queue: DispatchQueue = DispatchQueue(label: "ManualFanLeaseController"),
@@ -116,11 +119,13 @@ final class ManualFanLeaseController {
     }
   }
 
+  /// リース満了時にタイマーを破棄して期限切れハンドラを呼び出します。
   private func expireLease(for fanIndex: Int) {
     cancelLocked(for: fanIndex)
     expirationHandler(fanIndex)
   }
 
+  /// 管理中のタイマーがあれば停止して辞書から取り除きます。
   private func cancelLocked(for fanIndex: Int) {
     guard let timer = timers.removeValue(forKey: fanIndex) else {
       return
@@ -129,6 +134,7 @@ final class ManualFanLeaseController {
     timer.cancel()
   }
 
+  /// 指定ファン向けに単発の期限タイマーを新規作成します。
   private func scheduleLocked(for fanIndex: Int) {
     cancelLocked(for: fanIndex)
 
@@ -247,6 +253,7 @@ final class AppleSMCFanController: FanControlControlling {
   private let smc: AppleSMCControlling
   private let platform: FanControlPlatformChecking
 
+  /// SMC 抽象化とプラットフォーム判定を注入してテスト可能な制御器を構築します。
   init(smc: AppleSMCControlling, platform: FanControlPlatformChecking) {
     self.smc = smc
     self.platform = platform
@@ -303,6 +310,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// Apple Silicon 上で制御可能なファンかを事前検証します。
   private func validateWritableFan(_ index: Int) throws {
     guard platform.isAppleSilicon else {
       throw AppleSMCFanControlError.unsupportedPlatform
@@ -311,6 +319,7 @@ final class AppleSMCFanController: FanControlControlling {
     try validateFanIndex(index)
   }
 
+  /// 指定インデックスが存在するファン番号かどうかを確認します。
   private func validateFanIndex(_ index: Int) throws {
     let fanCount = readFanCount()
     guard fanCount > 0 else {
@@ -322,6 +331,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// SMC から現在のファン数を読み取り、整数へ正規化します。
   private func readFanCount() -> Int {
     guard let rawFanCount = smc.value(for: "FNum", allowZero: true) else {
       return 0
@@ -330,6 +340,7 @@ final class AppleSMCFanController: FanControlControlling {
     return max(0, Int(rawFanCount.rounded(.towardZero)))
   }
 
+  /// 指定ファンの最小・最大 RPM を読み取り、安全な書き込み範囲を返します。
   private func fanBounds(for index: Int) throws -> (minimumRpm: Int, maximumRpm: Int) {
     guard let current = smc.value(for: "F\(index)Ac", allowZero: false) else {
       throw AppleSMCFanControlError.incompleteTelemetry(index)
@@ -344,6 +355,7 @@ final class AppleSMCFanController: FanControlControlling {
     )
   }
 
+  /// 要求された RPM が読み取った安全範囲内かを確認します。
   private func validateTarget(
     _ targetRpm: Int,
     bounds: (minimumRpm: Int, maximumRpm: Int),
@@ -359,6 +371,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// モード変更前の SMC 値と書き込み経路をまとめて退避します。
   private func captureModeSnapshot(for index: Int) throws -> FanModeSnapshot {
     let capabilities = FanModeWriteCapabilities(
       index: index,
@@ -389,6 +402,7 @@ final class AppleSMCFanController: FanControlControlling {
     )
   }
 
+  /// 目標 RPM 変更前のターゲット値を退避します。
   private func captureTargetSnapshot(for index: Int) throws -> FanTargetSnapshot {
     let targetKey = "F\(index)Tg"
     guard smc.canWriteNumeric(for: targetKey) else {
@@ -402,6 +416,7 @@ final class AppleSMCFanController: FanControlControlling {
     return FanTargetSnapshot(key: targetKey, value: Int(value.rounded()))
   }
 
+  /// 利用可能な SMC 書き込み経路を使ってファンモードを書き込み、直後に検証します。
   private func writeMode(
     _ mode: AppleSMCFanMode,
     using capabilities: FanModeWriteCapabilities
@@ -438,6 +453,7 @@ final class AppleSMCFanController: FanControlControlling {
     try verifyMode(mode, using: capabilities)
   }
 
+  /// 退避しておいたモード関連キーを元の値へ戻します。
   private func restoreModeSnapshot(_ snapshot: FanModeSnapshot) throws {
     if snapshot.capabilities.writesModeKey {
       guard let modeKeyValue = snapshot.modeKeyValue else {
@@ -466,6 +482,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// モード変更後の SMC 値を読み戻し、意図した状態か確認します。
   private func verifyMode(
     _ mode: AppleSMCFanMode,
     using capabilities: FanModeWriteCapabilities
@@ -493,6 +510,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// 目標 RPM キーへ値を書き込み、読み戻しで結果を確認します。
   private func writeTarget(_ targetRpm: Int, for index: Int) throws {
     let targetKey = "F\(index)Tg"
     guard smc.canWriteNumeric(for: targetKey) else {
@@ -503,11 +521,13 @@ final class AppleSMCFanController: FanControlControlling {
     try verifyTarget(targetRpm, for: targetKey)
   }
 
+  /// 退避しておいた目標 RPM を元の値へ戻します。
   private func restoreTargetSnapshot(_ snapshot: FanTargetSnapshot) throws {
     try smc.writeNumeric(Double(snapshot.value), for: snapshot.key)
     try verifyTarget(snapshot.value, for: snapshot.key)
   }
 
+  /// 目標 RPM を読み戻し、書き込み結果が一致しているか確認します。
   private func verifyTarget(_ expectedTargetRpm: Int, for key: String) throws {
     guard let actualValue = smc.value(for: key, allowZero: true) else {
       throw AppleSMCFanControlError.stateSnapshotUnavailable(key)
@@ -521,6 +541,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// 整数キーを必須値として読み取り、欠損時は状態取得失敗を返します。
   private func readIntegerKey(_ key: String, allowZero: Bool) throws -> UInt32 {
     guard let value = smc.integerValue(for: key, allowZero: allowZero) else {
       throw AppleSMCFanControlError.stateSnapshotUnavailable(key)
@@ -529,6 +550,7 @@ final class AppleSMCFanController: FanControlControlling {
     return value
   }
 
+  /// 整数キーの読み戻し値が期待値と一致するかを共通化して検証します。
   private func verifyIntegerValue(
     _ expected: UInt32,
     for key: String,
@@ -542,6 +564,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// 失敗時にロールバックを試み、結果に応じて適切なエラーへまとめ直します。
   private func rollbackThenThrow(
     _ primaryError: AppleSMCFanControlError,
     rollback: () throws -> Void

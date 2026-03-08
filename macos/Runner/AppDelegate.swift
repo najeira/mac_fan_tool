@@ -13,15 +13,18 @@ class AppDelegate: FlutterAppDelegate {
   private var isQuitting = false
   private var hasRestoredFanModes = false
 
+  /// アプリ起動後にステータスバー項目を初期化し、常駐 UI を使える状態にします。
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
     configureStatusItem()
   }
 
+  /// ウィンドウを閉じてもアプリ本体は終了させず、メニューバー常駐を継続します。
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return false
   }
 
+  /// Dock などから再オープンされたときに、非表示だったメインウィンドウを再表示します。
   override func applicationShouldHandleReopen(
     _ sender: NSApplication,
     hasVisibleWindows flag: Bool
@@ -32,12 +35,14 @@ class AppDelegate: FlutterAppDelegate {
     return true
   }
 
+  /// 終了直前に手動制御中のファンを自動制御へ戻してから終了処理を続行します。
   override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     isQuitting = true
     restoreFansToAutomaticIfNeeded()
     return .terminateNow
   }
 
+  /// macOS の安全な状態復元に対応していることを通知します。
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
   }
@@ -53,14 +58,17 @@ class AppDelegate: FlutterAppDelegate {
     return true
   }
 
+  /// ステータスバー項目からメインウィンドウを前面に戻します。
   @objc private func showMainWindowFromStatusItem(_ sender: Any?) {
     showMainWindow()
   }
 
+  /// ステータスバー項目からアプリ終了を要求します。
   @objc private func quitFromStatusItem(_ sender: Any?) {
     NSApp.terminate(sender)
   }
 
+  /// メインウィンドウを復元してアプリを前面化します。
   private func showMainWindow() {
     guard let window = mainWindow else {
       return
@@ -74,6 +82,7 @@ class AppDelegate: FlutterAppDelegate {
     window.makeKeyAndOrderFront(nil)
   }
 
+  /// メインウィンドウを閉じずに非表示にします。
   private func hideMainWindow(_ window: NSWindow) {
     window.orderOut(nil)
   }
@@ -84,6 +93,7 @@ class AppDelegate: FlutterAppDelegate {
       NSApp.windows.first
   }
 
+  /// メニューバー常駐用のステータス項目とメニューを構築します。
   private func configureStatusItem() {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     item.button?.toolTip = "Mac Fan Tool"
@@ -119,6 +129,7 @@ class AppDelegate: FlutterAppDelegate {
     statusItem = item
   }
 
+  /// ステータスバーで使うアイコンをシンボル画像またはアプリアイコンから生成します。
   private func statusItemImage() -> NSImage? {
     if #available(macOS 11.0, *) {
       let image = NSImage(
@@ -137,6 +148,7 @@ class AppDelegate: FlutterAppDelegate {
     return image
   }
 
+  /// 終了時の多重実行を防ぎつつ、手動制御中の全ファンを自動制御へ戻します。
   private func restoreFansToAutomaticIfNeeded() {
     guard !hasRestoredFanModes else {
       return

@@ -115,6 +115,7 @@ class AppleSMCConnectionCore {
   private var connection: io_connect_t = 0
   private let ioMainPort: mach_port_t
 
+  /// AppleSMC サービスを探索して IOKit 接続を開きます。
   init() throws {
     if #available(macOS 12.0, *) {
       ioMainPort = kIOMainPortDefault
@@ -157,30 +158,35 @@ class AppleSMCConnectionCore {
     }
   }
 
+  /// 指定キーを数値として読み取り、必要ならゼロ値を除外します。
   func value(for key: String, allowZero: Bool = false) -> Double? {
     readOptionalValue(for: key, allowZero: allowZero) { value in
       decode(value: value)
     }
   }
 
+  /// 指定キーを整数として読み取り、必要ならゼロ値を除外します。
   func integerValue(for key: String, allowZero: Bool = false) -> UInt32? {
     try? readOptionalValue(for: key, allowZero: allowZero) { value in
       try decodeInteger(value: value)
     }
   }
 
+  /// 指定キーが数値型として書き込み可能かを返します。
   func canWriteNumeric(for key: String) -> Bool {
     readOptionalValue(for: key) { value in
       supportsNumericEncoding(value: value)
     } ?? false
   }
 
+  /// 指定キーが整数型として書き込み可能かを返します。
   func canWriteInteger(for key: String) -> Bool {
     readOptionalValue(for: key) { value in
       supportsIntegerEncoding(value: value)
     } ?? false
   }
 
+  /// 指定キーの生の SMC 値を読み取ります。
   func readValue(for key: String) -> SMCValue? {
     var value = SMCValue(key: key)
     let result = read(&value)
@@ -190,6 +196,7 @@ class AppleSMCConnectionCore {
     return value
   }
 
+  /// まずキー情報を取得し、その後で実データ本体を読み込んで `SMCValue` を埋めます。
   func read(_ value: inout SMCValue) -> kern_return_t {
     var input = SMCKeyData()
     var output = SMCKeyData()
@@ -229,6 +236,7 @@ class AppleSMCConnectionCore {
     return kIOReturnSuccess
   }
 
+  /// `IOConnectCallStructMethod` を呼び出して AppleSMC へコマンドを送信します。
   func call(
     index: UInt8,
     input: inout SMCKeyData,
@@ -247,10 +255,12 @@ class AppleSMCConnectionCore {
     )
   }
 
+  /// 取得した値がすべてゼロバイトかどうかを判定します。
   func isZero(_ value: SMCValue) -> Bool {
     value.bytes.prefix(Int(value.dataSize)).allSatisfy { $0 == 0 }
   }
 
+  /// AppleSMC へのアクセスを排他制御しながら任意の処理を実行します。
   func withLock<T>(_ body: () throws -> T) rethrows -> T {
     lock.lock()
     defer {
@@ -260,6 +270,7 @@ class AppleSMCConnectionCore {
     return try body()
   }
 
+  /// 任意キーを読み取り、変換クロージャへ渡して必要な型へ整形します。
   func readOptionalValue<T>(
     for key: String,
     allowZero: Bool = true,
@@ -274,6 +285,7 @@ class AppleSMCConnectionCore {
     }
   }
 
+  /// 任意キーを必須値として読み取り、欠損時は呼び出し元指定のエラーを返します。
   func withRequiredValue<T>(
     for key: String,
     error: @autoclosure () -> Error,
@@ -288,6 +300,7 @@ class AppleSMCConnectionCore {
     }
   }
 
+  /// 生の SMC 値を整数型へデコードします。
   func decodeInteger(value: SMCValue) throws -> UInt32 {
     switch value.dataType {
     case SMCDataType.ui8.rawValue:
@@ -328,6 +341,7 @@ class AppleSMCConnectionCore {
     }
   }
 
+  /// 指定 SMC 値が数値エンコードによる書き込みに対応しているかを判定します。
   func supportsNumericEncoding(value: SMCValue) -> Bool {
     switch value.dataType {
     case SMCDataType.ui8.rawValue:
@@ -345,6 +359,7 @@ class AppleSMCConnectionCore {
     }
   }
 
+  /// 指定 SMC 値が整数エンコードによる書き込みに対応しているかを判定します。
   func supportsIntegerEncoding(value: SMCValue) -> Bool {
     switch value.dataType {
     case SMCDataType.ui8.rawValue:
@@ -358,6 +373,7 @@ class AppleSMCConnectionCore {
     }
   }
 
+  /// 生の SMC 値を型ごとの係数に従って `Double` へ変換します。
   func decode(value: SMCValue) -> Double? {
     switch value.dataType {
     case SMCDataType.ui8.rawValue:
@@ -415,6 +431,7 @@ class AppleSMCConnectionCore {
 }
 
 extension FourCharCode {
+  /// 4文字の SMC キー文字列を FourCharCode へ変換します。
   init(from string: String) {
     precondition(string.count == 4)
     self = string.utf8.reduce(0) { partialResult, codeUnit in
@@ -424,6 +441,7 @@ extension FourCharCode {
 }
 
 extension UInt32 {
+  /// 4バイトのビッグエンディアン表現から `UInt32` を復元します。
   init(bytes: (UInt8, UInt8, UInt8, UInt8)) {
     self = UInt32(bytes.0) << 24 |
       UInt32(bytes.1) << 16 |
@@ -431,6 +449,7 @@ extension UInt32 {
       UInt32(bytes.3)
   }
 
+  /// `UInt32` を 4 文字の SMC 型・キー文字列へ変換します。
   var fourCharString: String {
     String(UnicodeScalar((self >> 24) & 0xff)!) +
       String(UnicodeScalar((self >> 16) & 0xff)!) +
@@ -440,18 +459,21 @@ extension UInt32 {
 }
 
 extension UInt16 {
+  /// 2バイトのビッグエンディアン表現から `UInt16` を復元します。
   init(bytes: (UInt8, UInt8)) {
     self = UInt16(bytes.0) << 8 | UInt16(bytes.1)
   }
 }
 
 extension Int {
+  /// AppleSMC の `fpe2` 固定小数形式を整数へ変換します。
   init(fpe2 bytes: (UInt8, UInt8)) {
     self = (Int(bytes.0) << 6) + (Int(bytes.1) >> 2)
   }
 }
 
 extension Float {
+  /// 先頭 4 バイトを `Float` のメモリ表現として読み取ります。
   init?(smcBytes: [UInt8]) {
     guard smcBytes.count >= 4 else {
       return nil

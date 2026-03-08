@@ -101,6 +101,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// 現在の環境と登録状態からヘルパー利用可否を評価します。
   private func helperAvailability() -> HelperAvailability {
     do {
       let environment = try currentEnvironment()
@@ -116,6 +117,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// ServiceManagement の状態値をアプリ内の簡略化した状態へ変換します。
   @available(macOS 13.0, *)
   private func serviceStatus(from status: SMAppService.Status) -> HelperServiceStatus {
     switch status {
@@ -183,12 +185,14 @@ final class FanControlHelperClient {
     try awaiter.wait(timeout: timeout)
   }
 
+  /// コマンド実行前にサービス登録状態を確認済みの環境を返します。
   private func commandEnvironment() throws -> ResolvedEnvironment {
     let environment = try currentEnvironment()
     try serviceReadinessChecker.ensureReady(environment: environment)
     return environment
   }
 
+  /// 差し替え用リゾルバがあればそれを使い、なければ本番環境を解決します。
   private func currentEnvironment() throws -> ResolvedEnvironment {
     if let environmentResolver {
       return try environmentResolver()
@@ -197,6 +201,7 @@ final class FanControlHelperClient {
     return try resolvedEnvironment()
   }
 
+  /// 差し替え用ファクトリがあればそれを使って XPC 接続を生成します。
   private func makeConnection(for environment: ResolvedEnvironment) -> FanControlXPCConnection {
     if let connectionFactory {
       return connectionFactory(environment)
@@ -205,6 +210,7 @@ final class FanControlHelperClient {
     return FanControlNSXPCConnection(environment: environment)
   }
 
+  /// `fan-N` 形式の識別子からヘルパー用の整数インデックスを取り出します。
   private func resolvedFanIndex(from fanId: String) throws -> Int {
     let prefix = "fan-"
     guard fanId.hasPrefix(prefix) else {
@@ -221,6 +227,7 @@ final class FanControlHelperClient {
     return index
   }
 
+  /// バンドル配置、署名、ヘルパー同梱状態を検証して実行環境を構築します。
   private func resolvedEnvironment() throws -> ResolvedEnvironment {
     guard #available(macOS 13.0, *) else {
       throw FanControlHelperClientError.unsupportedOS
@@ -300,16 +307,19 @@ final class FanControlHelperClient {
     )
   }
 
+  /// アプリ同梱の特権ヘルパー実行ファイルの配置先 URL を返します。
   private func helperExecutableURL(for bundleURL: URL) -> URL {
     bundleURL.appendingPathComponent(FanControlHelperConfiguration.helperRelativePath)
   }
 
+  /// アプリ同梱の LaunchDaemon plist の配置先 URL を返します。
   private func launchDaemonPlistURL(for bundleURL: URL) -> URL {
     bundleURL
       .appendingPathComponent("Contents/Library/LaunchDaemons", isDirectory: true)
       .appendingPathComponent(FanControlHelperConfiguration.launchDaemonPlistName)
   }
 
+  /// アプリが `/Applications` 配下にインストールされているかを確認します。
   private func isInstalledInApplications(bundleURL: URL) -> Bool {
     let applicationDirectories =
       FileManager.default.urls(for: .applicationDirectory, in: .localDomainMask)
@@ -324,6 +334,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// 実行中アプリ自身のコード署名情報を取得します。
   private func currentProcessSignature() throws -> CodeSignatureDetails {
     var dynamicCode: SecCode?
     let status = SecCodeCopySelf([], &dynamicCode)
@@ -344,6 +355,7 @@ final class FanControlHelperClient {
     return try signatureDetails(for: staticCode)
   }
 
+  /// 指定した実行ファイル URL からコード署名情報を取得します。
   private func signatureDetails(forExecutableAt url: URL) throws -> CodeSignatureDetails {
     var staticCode: SecStaticCode?
     let status = SecStaticCodeCreateWithPath(url as CFURL, [], &staticCode)
@@ -356,6 +368,7 @@ final class FanControlHelperClient {
     return try signatureDetails(for: staticCode)
   }
 
+  /// `SecStaticCode` から署名識別子とチーム ID を取り出します。
   private func signatureDetails(for staticCode: SecStaticCode) throws -> CodeSignatureDetails {
     var information: CFDictionary?
     let status = SecCodeCopySigningInformation(
@@ -372,6 +385,7 @@ final class FanControlHelperClient {
     return CodeSignatureDetails(dictionary: information as NSDictionary)
   }
 
+  /// ヘルパー接続時に使うコード署名要件文字列を生成します。
   private func codeSigningRequirement(identifier: String, teamIdentifier: String) -> String {
     CodeSigningRequirementBuilder.requirement(
       identifier: identifier,
@@ -434,6 +448,7 @@ protocol FanControlServiceReadinessChecking {
 }
 
 private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking {
+  /// ServiceManagement の登録・承認状態を検査し、必要なら登録処理を進めます。
   func ensureReady(environment: ResolvedEnvironment) throws {
     guard #available(macOS 13.0, *) else {
       return
@@ -442,6 +457,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
     try ensureServiceReady(environment: environment)
   }
 
+  /// 状態ごとに登録、承認待ち、失敗を振り分けます。
   @available(macOS 13.0, *)
   private func ensureServiceReady(environment: ResolvedEnvironment) throws {
     switch environment.service.status {
@@ -462,6 +478,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
     }
   }
 
+  /// 必要に応じて登録リセットを挟みつつ、特権ヘルパーを登録します。
   @available(macOS 13.0, *)
   private func registerService(
     environment: ResolvedEnvironment,
@@ -491,6 +508,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
     }
   }
 
+  /// 既存の特権ヘルパー登録を解除し、壊れた状態を掃除します。
   @available(macOS 13.0, *)
   private func resetRegistration(environment: ResolvedEnvironment) throws {
     do {
@@ -505,6 +523,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
     }
   }
 
+  /// 登録直後の状態が実際に利用可能かを再確認します。
   @available(macOS 13.0, *)
   private func ensureRegisteredStatus(environment: ResolvedEnvironment) throws {
     switch environment.service.status {
@@ -525,6 +544,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
     }
   }
 
+  /// 登録情報のリセットを試すべきエラーかどうかを判定します。
   @available(macOS 13.0, *)
   private func shouldResetRegistration(
     status: SMAppService.Status,
@@ -546,6 +566,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
     }
   }
 
+  /// ServiceManagement の `NSError` をユーザー向けメッセージへ変換します。
   private func registrationFailureMessage(for error: NSError) -> String {
     switch error.code {
     case kSMErrorInvalidSignature:
@@ -587,6 +608,7 @@ private struct CodeSignatureDetails {
   let identifier: String?
   let teamIdentifier: String?
 
+  /// 署名情報ディクショナリから必要な識別子だけを抜き出します。
   init(dictionary: NSDictionary) {
     identifier = dictionary[kSecCodeInfoIdentifier as String] as? String
     teamIdentifier = dictionary[kSecCodeInfoTeamIdentifier as String] as? String
@@ -610,6 +632,7 @@ protocol FanControlXPCConnection: AnyObject {
 private final class FanControlNSXPCConnection: FanControlXPCConnection {
   private let connection: NSXPCConnection
 
+  /// 特権ヘルパー向けの `NSXPCConnection` を構築し、必要なら署名要件も設定します。
   init(environment: ResolvedEnvironment) {
     connection = NSXPCConnection(
       machServiceName: environment.configuration.machServiceName,

@@ -3,6 +3,7 @@ import Foundation
 import IOKit
 
 private enum Sysctl {
+  /// `sysctlbyname` を使って指定キーの `Int32` 値を取得します。
   static func int32(_ name: String) -> Int32? {
     var value: Int32 = 0
     var size = MemoryLayout<Int32>.size
@@ -12,6 +13,7 @@ private enum Sysctl {
     return value
   }
 
+  /// 実行環境が Apple Silicon かどうかを判定します。
   static var isAppleSilicon: Bool {
     int32("hw.optional.arm64") == 1
   }
@@ -100,6 +102,7 @@ private final class AppleSMCConnection: AppleSMCConnectionCore, AppleSMCControll
     }
   }
 
+  /// 書き戻し可能な整数キーをデコードし、ヘルパー用エラーへ正規化します。
   private func decodeWritableInteger(_ value: SMCValue) throws -> UInt32 {
     do {
       return try decodeInteger(value: value)
@@ -108,6 +111,7 @@ private final class AppleSMCConnection: AppleSMCConnectionCore, AppleSMCControll
     }
   }
 
+  /// SMC キーの型に合わせて数値を書き込み用バイト列へ変換します。
   private func encodeNumeric(_ numericValue: Double, using value: SMCValue) throws -> [UInt8] {
     switch value.dataType {
     case SMCDataType.ui8.rawValue:
@@ -178,6 +182,7 @@ private final class AppleSMCConnection: AppleSMCConnectionCore, AppleSMCControll
     }
   }
 
+  /// SMC キーの整数型に合わせて `UInt32` を書き込み用バイト列へ変換します。
   private func encodeInteger(_ integerValue: UInt32, using value: SMCValue) throws -> [UInt8] {
     switch value.dataType {
     case SMCDataType.ui8.rawValue:
@@ -266,6 +271,7 @@ private final class AppleSMCConnection: AppleSMCConnectionCore, AppleSMCControll
     return UInt32(roundedValue)
   }
 
+  /// SMC 値デコード失敗をファン制御向けの公開エラーへ写像します。
   private func mapDecodeError(_ error: AppleSMCValueDecodingError) -> AppleSMCFanControlError {
     switch error {
     case let .invalidDataSize(key, expected, actual):
@@ -281,6 +287,7 @@ private struct SystemFanControlPlatform: FanControlPlatformChecking {
 }
 
 extension AppleSMCFanController {
+  /// 実機の AppleSMC 接続を使う既定のファンコントローラを生成します。
   convenience init() throws {
     try self.init(
       smc: AppleSMCConnection(),

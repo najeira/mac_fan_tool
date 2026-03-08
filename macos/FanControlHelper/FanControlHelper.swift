@@ -39,6 +39,7 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     super.init()
   }
 
+  /// 実機の AppleSMC コントローラを生成し、初期化失敗時はエラーを保持します。
   private static func resolveController() -> (
     controller: FanControlControlling?,
     error: AppleSMCFanControlError?
@@ -125,6 +126,7 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     throw controllerError ?? .smcUnavailable("The fan controller could not be initialized.")
   }
 
+  /// ファンモードに応じて手動制御リースの開始または解除を切り替えます。
   private func updateManualLease(for fanIndex: Int, mode: AppleSMCFanMode) {
     switch mode {
     case .manual:
@@ -134,14 +136,17 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     }
   }
 
+  /// 指定ファンの手動制御リースを開始または延長します。
   private func armManualLease(for fanIndex: Int) {
     manualLeaseController.arm(for: fanIndex)
   }
 
+  /// 指定ファンの手動制御リースを解除します。
   private func cancelManualLease(for fanIndex: Int) {
     manualLeaseController.cancel(for: fanIndex)
   }
 
+  /// リース満了時に対象ファンを自動制御へ戻し、失敗時はログへ記録します。
   private func expireManualLease(for fanIndex: Int) {
     do {
       let controller = try resolvedController()

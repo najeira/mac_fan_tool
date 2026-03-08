@@ -40,6 +40,7 @@ private enum AppleSiliconModel {
   case m4Ultra
   case unknown
 
+  /// CPU ブランド文字列から Apple Silicon 世代と派生モデルを推定します。
   static func detect(from brand: String) -> AppleSiliconModel {
     let normalized = brand.uppercased()
 
@@ -94,6 +95,7 @@ private enum AppleSiliconModel {
     return .unknown
   }
 
+  /// モデルを大まかな世代へ寄せてセンサーカタログ選択に使います。
   var generation: AppleSiliconGeneration {
     switch self {
     case .m1, .m1Pro, .m1Max, .m1Ultra:
@@ -119,6 +121,7 @@ private enum AppleSiliconGeneration {
 }
 
 private enum Sysctl {
+  /// `sysctlbyname` から文字列値を取得します。
   static func string(_ name: String) -> String? {
     var size: size_t = 0
     guard sysctlbyname(name, nil, &size, nil, 0) == 0 else {
@@ -133,6 +136,7 @@ private enum Sysctl {
     return String(cString: buffer)
   }
 
+  /// `sysctlbyname` から `Int32` 値を取得します。
   static func int32(_ name: String) -> Int32? {
     var value: Int32 = 0
     var size = MemoryLayout<Int32>.size
@@ -142,6 +146,7 @@ private enum Sysctl {
     return value
   }
 
+  /// 実行中プロセスが Apple Silicon 上かどうかを判定します。
   static var isAppleSilicon: Bool {
     int32("hw.optional.arm64") == 1
   }
@@ -190,6 +195,7 @@ private final class AppleSiliconHardwareMonitor {
   private let smc: AppleSMCConnection?
   private let startupNote: String?
 
+  /// チップ種別を判定し、AppleSMC 接続可否と起動時メッセージを初期化します。
   init() {
     chipBrand = Sysctl.string("machdep.cpu.brand_string") ?? "Apple Silicon"
     chipModel = AppleSiliconModel.detect(from: chipBrand)
@@ -313,6 +319,7 @@ private final class AppleSiliconHardwareMonitor {
     try FanControlHelperClient.shared.renewManualLease(fanId: fanId)
   }
 
+  /// SMC と HID の両方からセンサーを集めて 1 つの配列へ統合します。
   private func readSensors() -> [SensorReadingData] {
     guard smc != nil else {
       return []
@@ -327,6 +334,7 @@ private final class AppleSiliconHardwareMonitor {
     return deduplicated(readings)
   }
 
+  /// 既知の SMC センサーキー一覧を走査して妥当な温度だけを返します。
   private func readKnownSmcSensors(_ descriptors: [SensorDescriptor]) -> [SensorReadingData] {
     guard let smc else {
       return []
@@ -358,6 +366,7 @@ private final class AppleSiliconHardwareMonitor {
     return readings
   }
 
+  /// モデル別の戦略に従って CPU 温度センサーの取得元を切り替えます。
   private func readCpuThermals(from hidValues: [String: Double]) -> [SensorReadingData] {
     switch cpuThermalStrategy {
     case .smcOnly:
@@ -371,6 +380,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// `PMU tdie` 系の HID センサーを CPU 温度センサーへ変換します。
   private func readPmuTdieCpuThermals(from hidValues: [String: Double]) -> [SensorReadingData] {
     hidValues
       .filter { $0.key.hasPrefix("PMU tdie") }
@@ -391,12 +401,14 @@ private final class AppleSiliconHardwareMonitor {
       .sorted { ($0.id ?? "") < ($1.id ?? "") }
   }
 
+  /// 補助的な HID 温度センサーを UI 表示用の型へ写像します。
   private func readSupplementalHidSensors(from hidValues: [String: Double]) -> [SensorReadingData] {
     hidValues.compactMap { key, value in
       supplementalHidSensor(key: key, value: value)
     }
   }
 
+  /// IOHID イベントシステムから Apple Silicon の温度値辞書を取得します。
   private func hidTemperatureValues() -> [String: Double] {
     guard let sensors = AppleSiliconTemperatureSensors(0xff00, 0x0005, kIOHIDEventTypeTemperature) else {
       return [:]
@@ -407,6 +419,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// HID センサー名ごとの命名規則に従って表示名と種別を付与します。
   private func supplementalHidSensor(key: String, value: Double) -> SensorReadingData? {
     guard isReasonableTemperature(value) else {
       return nil
@@ -505,6 +518,7 @@ private final class AppleSiliconHardwareMonitor {
     return nil
   }
 
+  /// センサー ID の重複を除去し、表示順が安定するようソートします。
   private func deduplicated(_ readings: [SensorReadingData]) -> [SensorReadingData] {
     var seen = Set<String>()
     var result: [SensorReadingData] = []
@@ -523,6 +537,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// AppleSMC から各ファンの回転数、範囲、モードを読み取って整形します。
   private func readFans() -> [FanReadingData] {
     guard let smc else {
       return []
@@ -571,6 +586,7 @@ private final class AppleSiliconHardwareMonitor {
     return fans
   }
 
+  /// AppleSMC の `FNum` を読み取り、利用可能なファン数を返します。
   private func readFanCount() -> Int {
     guard let smc,
           let rawFanCount = smc.value(for: "FNum", allowZero: true) else {
@@ -580,6 +596,7 @@ private final class AppleSiliconHardwareMonitor {
     return max(0, Int(rawFanCount.rounded(.towardZero)))
   }
 
+  /// 全ファンで目標 RPM とモード変更の書き込みが可能かを判定します。
   private func supportsFanControl(fanCount: Int) -> Bool {
     guard let smc, fanCount > 0 else {
       return false
@@ -601,6 +618,7 @@ private final class AppleSiliconHardwareMonitor {
     return true
   }
 
+  /// 補足メッセージを空要素抜きで結合し、UI 表示用の 1 つの文にします。
   private func combinedNote(_ parts: String?...) -> String? {
     let filteredParts: [String] = parts.compactMap { part -> String? in
       guard let part, !part.isEmpty else {
@@ -616,10 +634,12 @@ private final class AppleSiliconHardwareMonitor {
     return filteredParts.joined(separator: "\n")
   }
 
+  /// 温度として扱うには不自然な値を除外します。
   private func isReasonableTemperature(_ value: Double) -> Bool {
     value.isFinite && value > 0 && value < 140
   }
 
+  /// 文字列末尾の数値連番を抽出してセンサー番号に使います。
   private func trailingInteger(in text: String) -> Int? {
     let suffix = text.reversed().prefix { $0.isNumber }.reversed()
     guard !suffix.isEmpty else {
@@ -628,6 +648,7 @@ private final class AppleSiliconHardwareMonitor {
     return Int(String(suffix))
   }
 
+  /// `NAND CHx temp` 表記からチャンネル番号を抜き出します。
   private func channelNumber(in text: String) -> Int? {
     guard let chRange = text.range(of: "CH"),
           let tempRange = text.range(of: " temp") else {
@@ -638,6 +659,7 @@ private final class AppleSiliconHardwareMonitor {
     return Int(value)
   }
 
+  /// センサーが取得できなかったときの状況説明文を生成します。
   private func missingSensorNote() -> String? {
     switch chipModel.generation {
     case .unknown:
@@ -647,6 +669,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// CPU 温度の取得で優先するセンサー経路をモデルごとに切り替えます。
   private var cpuThermalStrategy: CpuThermalStrategy {
     switch chipModel {
     case .m4Pro:
@@ -656,6 +679,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// CPU 温度取得に使う SMC フォールバックセンサー一覧を返します。
   private var cpuFallbackSmcSensorCatalog: [SensorDescriptor] {
     switch chipModel {
     case .m4Pro:
@@ -665,6 +689,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// GPU センサーとして採用する SMC センサー一覧を返します。
   private var gpuSensorCatalog: [SensorDescriptor] {
     switch chipModel {
     case .m4Pro:
@@ -674,12 +699,14 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// CPU/GPU 以外の補助 SMC センサー一覧を組み立てます。
   private var supplementalSmcSensorCatalog: [SensorDescriptor] {
     generationSmcSensorCatalog.filter { $0.kind != .cpu && $0.kind != .gpu } +
       Self.appleSiliconCommonSensors +
       modelSpecificSupplementalSmcSensors
   }
 
+  /// Apple Silicon 世代ごとの基本センサーカタログを返します。
   private var generationSmcSensorCatalog: [SensorDescriptor] {
     switch chipModel.generation {
     case .m1:
@@ -695,6 +722,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// 一部モデル専用の補助センサー一覧を返します。
   private var modelSpecificSupplementalSmcSensors: [SensorDescriptor] {
     switch chipModel {
     case .m4Pro:
@@ -944,6 +972,7 @@ final class HardwareBridge: HardwareHostApi {
     }
   }
 
+  /// `ProcessInfo` の熱状態を共有 API の列挙値へ変換します。
   private func mapThermalState(_ state: ProcessInfo.ThermalState) -> ThermalStateData {
     switch state {
     case .nominal:
