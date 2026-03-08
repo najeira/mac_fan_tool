@@ -1,6 +1,5 @@
 import Dispatch
 import Foundation
-import Security
 
 let configuration = FanControlHelperConfiguration.currentAppConfiguration()
 let listener = NSXPCListener(
@@ -45,36 +44,11 @@ private enum HelperStartupError: LocalizedError {
   }
 }
 
-private struct CodeSignatureDetails {
-  let teamIdentifier: String?
-}
-
 /// 実行中のヘルパープロセス自身のコード署名情報を読み取り、接続元検証に使う値を返します。
 private func currentProcessSignature() throws -> CodeSignatureDetails {
-  var dynamicCode: SecCode?
-  let status = SecCodeCopySelf([], &dynamicCode)
-  guard status == errSecSuccess, let dynamicCode else {
+  do {
+    return try CodeSignatureReader.currentProcessDetails()
+  } catch {
     throw HelperStartupError.missingTeamIdentifier
   }
-
-  var staticCode: SecStaticCode?
-  let staticStatus = SecCodeCopyStaticCode(dynamicCode, [], &staticCode)
-  guard staticStatus == errSecSuccess, let staticCode else {
-    throw HelperStartupError.missingTeamIdentifier
-  }
-
-  var information: CFDictionary?
-  let infoStatus = SecCodeCopySigningInformation(
-    staticCode,
-    SecCSFlags(rawValue: kSecCSSigningInformation),
-    &information
-  )
-  guard infoStatus == errSecSuccess,
-        let information = information as NSDictionary? else {
-    throw HelperStartupError.missingTeamIdentifier
-  }
-
-  return CodeSignatureDetails(
-    teamIdentifier: information[kSecCodeInfoTeamIdentifier as String] as? String
-  )
 }

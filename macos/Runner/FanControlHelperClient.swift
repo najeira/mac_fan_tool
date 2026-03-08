@@ -1,5 +1,4 @@
 import Foundation
-import Security
 import ServiceManagement
 
 /// アプリ本体から特権ヘルパーの登録、接続、コマンド実行を仲介するクライアントです。
@@ -74,29 +73,22 @@ final class FanControlHelperClient {
 
   /// ファン ID をヘルパー用のインデックスへ変換してモード変更を依頼します。
   func setFanMode(fanId: String, mode: FanModeData) throws {
-    let fanIndex = try resolvedFanIndex(from: fanId)
-    let environment = try commandEnvironment()
-    try performCommand(environment: environment) { remote, reply in
+    try performFanCommand(fanId: fanId) { remote, reply, fanIndex in
       remote.setFanMode(fanIndex, modeRawValue: mode.rawValue, withReply: reply)
     }
   }
 
   /// ファン ID をヘルパー用のインデックスへ変換して目標 RPM を設定します。
   func setFanTargetRpm(fanId: String, targetRpm: Int64) throws {
-    let fanIndex = try resolvedFanIndex(from: fanId)
     let requestedTarget = Int(targetRpm)
-
-    let environment = try commandEnvironment()
-    try performCommand(environment: environment) { remote, reply in
+    try performFanCommand(fanId: fanId) { remote, reply, fanIndex in
       remote.applyManualTargetRpm(fanIndex, targetRpm: requestedTarget, withReply: reply)
     }
   }
 
   /// 手動ファン制御リースの期限延長をヘルパーへ依頼します。
   func renewManualLease(fanId: String) throws {
-    let fanIndex = try resolvedFanIndex(from: fanId)
-    let environment = try commandEnvironment()
-    try performCommand(environment: environment) { remote, reply in
+    try performFanCommand(fanId: fanId) { remote, reply, fanIndex in
       remote.renewManualLease(fanIndex, withReply: reply)
     }
   }
@@ -199,6 +191,18 @@ final class FanControlHelperClient {
     }
 
     return try resolvedEnvironment()
+  }
+
+  /// ファン ID の解決と環境準備をまとめて行い、ヘルパー呼び出しへ引き渡します。
+  private func performFanCommand(
+    fanId: String,
+    command: (FanControlXPCProtocol, @escaping (String?) -> Void, Int) -> Void
+  ) throws {
+    let fanIndex = try resolvedFanIndex(from: fanId)
+    let environment = try commandEnvironment()
+    try performCommand(environment: environment) { remote, reply in
+      command(remote, reply, fanIndex)
+    }
   }
 
   /// 差し替え用ファクトリがあればそれを使って XPC 接続を生成します。
@@ -336,53 +340,36 @@ final class FanControlHelperClient {
 
   /// 実行中アプリ自身のコード署名情報を取得します。
   private func currentProcessSignature() throws -> CodeSignatureDetails {
-    var dynamicCode: SecCode?
-    let status = SecCodeCopySelf([], &dynamicCode)
-    guard status == errSecSuccess, let dynamicCode else {
+    do {
+      return try CodeSignatureReader.currentProcessDetails()
+    } catch CodeSignatureReaderError.currentCodeUnavailable {
       throw FanControlHelperClientError.signedBuildRequired(
         "macOS could not read the app signature."
       )
-    }
-
-    var staticCode: SecStaticCode?
-    let staticStatus = SecCodeCopyStaticCode(dynamicCode, [], &staticCode)
-    guard staticStatus == errSecSuccess, let staticCode else {
+    } catch CodeSignatureReaderError.currentStaticCodeUnavailable {
       throw FanControlHelperClientError.signedBuildRequired(
         "macOS could not inspect the app signature."
       )
-    }
-
-    return try signatureDetails(for: staticCode)
-  }
-
-  /// 指定した実行ファイル URL からコード署名情報を取得します。
-  private func signatureDetails(forExecutableAt url: URL) throws -> CodeSignatureDetails {
-    var staticCode: SecStaticCode?
-    let status = SecStaticCodeCreateWithPath(url as CFURL, [], &staticCode)
-    guard status == errSecSuccess, let staticCode else {
-      throw FanControlHelperClientError.signedBuildRequired(
-        "macOS could not inspect the bundled helper signature."
-      )
-    }
-
-    return try signatureDetails(for: staticCode)
-  }
-
-  /// `SecStaticCode` から署名識別子とチーム ID を取り出します。
-  private func signatureDetails(for staticCode: SecStaticCode) throws -> CodeSignatureDetails {
-    var information: CFDictionary?
-    let status = SecCodeCopySigningInformation(
-      staticCode,
-      SecCSFlags(rawValue: kSecCSSigningInformation),
-      &information
-    )
-    guard status == errSecSuccess, let information else {
+    } catch {
       throw FanControlHelperClientError.signedBuildRequired(
         "macOS could not inspect the code signature."
       )
     }
+  }
 
-    return CodeSignatureDetails(dictionary: information as NSDictionary)
+  /// 指定した実行ファイル URL からコード署名情報を取得します。
+  private func signatureDetails(forExecutableAt url: URL) throws -> CodeSignatureDetails {
+    do {
+      return try CodeSignatureReader.details(forExecutableAt: url)
+    } catch CodeSignatureReaderError.executableStaticCodeUnavailable {
+      throw FanControlHelperClientError.signedBuildRequired(
+        "macOS could not inspect the bundled helper signature."
+      )
+    } catch {
+      throw FanControlHelperClientError.signedBuildRequired(
+        "macOS could not inspect the code signature."
+      )
+    }
   }
 
   /// ヘルパー接続時に使うコード署名要件文字列を生成します。
@@ -601,17 +588,6 @@ struct ResolvedEnvironment {
   @available(macOS 13.0, *)
   var service: SMAppService {
     SMAppService.daemon(plistName: FanControlHelperConfiguration.launchDaemonPlistName)
-  }
-}
-
-private struct CodeSignatureDetails {
-  let identifier: String?
-  let teamIdentifier: String?
-
-  /// 署名情報ディクショナリから必要な識別子だけを抜き出します。
-  init(dictionary: NSDictionary) {
-    identifier = dictionary[kSecCodeInfoIdentifier as String] as? String
-    teamIdentifier = dictionary[kSecCodeInfoTeamIdentifier as String] as? String
   }
 }
 

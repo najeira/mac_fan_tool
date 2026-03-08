@@ -2,23 +2,6 @@ import Darwin
 import Foundation
 import IOKit
 
-private enum Sysctl {
-  /// `sysctlbyname` を使って指定キーの `Int32` 値を取得します。
-  static func int32(_ name: String) -> Int32? {
-    var value: Int32 = 0
-    var size = MemoryLayout<Int32>.size
-    guard sysctlbyname(name, &value, &size, nil, 0) == 0 else {
-      return nil
-    }
-    return value
-  }
-
-  /// 実行環境が Apple Silicon かどうかを判定します。
-  static var isAppleSilicon: Bool {
-    int32("hw.optional.arm64") == 1
-  }
-}
-
 /// AppleSMC への接続を管理し、キーの読み書きを直列化して行う低レベルラッパーです。
 private final class AppleSMCConnection: AppleSMCConnectionCore, AppleSMCControlling {
   override init() throws {

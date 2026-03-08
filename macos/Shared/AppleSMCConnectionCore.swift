@@ -86,6 +86,7 @@ struct SMCValue {
   var bytes = [UInt8](repeating: 0, count: 32)
 }
 
+/// AppleSMC 接続の確立段階で起きる失敗理由を表します。
 enum AppleSMCConnectionOpenError: Error {
   case lookupFailed(result: kern_return_t)
   case serviceNotFound
@@ -105,11 +106,13 @@ enum AppleSMCConnectionOpenError: Error {
   }
 }
 
+/// AppleSMC の生データを整数へ変換するときの失敗理由を表します。
 enum AppleSMCValueDecodingError: Error {
   case invalidDataSize(key: String, expected: Int, actual: Int)
   case unsupportedDataType(key: String, dataType: String)
 }
 
+/// AppleSMC の接続確立、読み取り、デコードを共通化する基盤クラスです。
 class AppleSMCConnectionCore {
   private let lock = NSLock()
   private var connection: io_connect_t = 0
