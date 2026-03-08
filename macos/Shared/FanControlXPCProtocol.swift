@@ -263,50 +263,35 @@ final class AppleSMCFanController: FanControlControlling {
   func setFanMode(index: Int, mode: AppleSMCFanMode) throws {
     try validateWritableFan(index)
     let snapshot = try captureModeSnapshot(for: index)
-
-    do {
+    try performFanWrite {
       try writeMode(mode, using: snapshot.capabilities)
-    } catch let error as AppleSMCFanControlError {
-      try rollbackThenThrow(error) {
-        try restoreModeSnapshot(snapshot)
-      }
+    } rollback: {
+      try restoreModeSnapshot(snapshot)
     }
   }
 
   /// 指定ファンの目標 RPM を現在のモードのまま更新します。
   func setFanTargetRpm(index: Int, targetRpm: Int) throws {
-    try validateWritableFan(index)
-
-    let bounds = try fanBounds(for: index)
-    try validateTarget(targetRpm, bounds: bounds, index: index)
+    try validateWritableFanTarget(index: index, targetRpm: targetRpm)
     let snapshot = try captureTargetSnapshot(for: index)
-
-    do {
+    try performFanWrite {
       try writeTarget(targetRpm, for: index)
-    } catch let error as AppleSMCFanControlError {
-      try rollbackThenThrow(error) {
-        try restoreTargetSnapshot(snapshot)
-      }
+    } rollback: {
+      try restoreTargetSnapshot(snapshot)
     }
   }
 
   /// 指定ファンを手動モードへ切り替えつつ目標 RPM を一括適用します。
   func applyManualTargetRpm(index: Int, targetRpm: Int) throws {
-    try validateWritableFan(index)
-
-    let bounds = try fanBounds(for: index)
-    try validateTarget(targetRpm, bounds: bounds, index: index)
+    try validateWritableFanTarget(index: index, targetRpm: targetRpm)
     let modeSnapshot = try captureModeSnapshot(for: index)
     let targetSnapshot = try captureTargetSnapshot(for: index)
-
-    do {
+    try performFanWrite {
       try writeMode(.manual, using: modeSnapshot.capabilities)
       try writeTarget(targetRpm, for: index)
-    } catch let error as AppleSMCFanControlError {
-      try rollbackThenThrow(error) {
-        try restoreTargetSnapshot(targetSnapshot)
-        try restoreModeSnapshot(modeSnapshot)
-      }
+    } rollback: {
+      try restoreTargetSnapshot(targetSnapshot)
+      try restoreModeSnapshot(modeSnapshot)
     }
   }
 
@@ -317,6 +302,13 @@ final class AppleSMCFanController: FanControlControlling {
     }
 
     try validateFanIndex(index)
+  }
+
+  /// 指定ファンへの書き込み前に存在確認と目標 RPM の範囲検証をまとめて行います。
+  private func validateWritableFanTarget(index: Int, targetRpm: Int) throws {
+    try validateWritableFan(index)
+    let bounds = try fanBounds(for: index)
+    try validateTarget(targetRpm, bounds: bounds, index: index)
   }
 
   /// 指定インデックスが存在するファン番号かどうかを確認します。
@@ -368,6 +360,18 @@ final class AppleSMCFanController: FanControlControlling {
         minimum: bounds.minimumRpm,
         maximum: bounds.maximumRpm
       )
+    }
+  }
+
+  /// ファン書き込み処理を実行し、失敗時は呼び出し元が渡したロールバックを試行します。
+  private func performFanWrite(
+    write: () throws -> Void,
+    rollback: () throws -> Void
+  ) throws {
+    do {
+      try write()
+    } catch let error as AppleSMCFanControlError {
+      try rollbackThenThrow(error, rollback: rollback)
     }
   }
 
