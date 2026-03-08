@@ -33,8 +33,6 @@ class HeroPanel extends StatelessWidget {
           Row(
             children: [
               const _ViewSwitcher(),
-              const Spacer(),
-              const _RefreshButton(),
             ],
           ),
           const SizedBox(height: 18),
@@ -98,44 +96,6 @@ class _ViewSwitcher extends ConsumerWidget {
           ref.viewActions.setView(selection.first);
         }
       },
-    );
-  }
-}
-
-class _RefreshButton extends ConsumerWidget {
-  const _RefreshButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final isRefreshing = ref.watch(monitorIsRefreshingProvider);
-
-    final refreshButtonStyle = FilledButton.styleFrom(
-      minimumSize: const Size(0, 54),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      textStyle: theme.textTheme.labelLarge?.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
-      backgroundColor: DashboardColors.heroControlSelected,
-      disabledBackgroundColor: DashboardColors.heroControlIdle,
-      foregroundColor: DashboardColors.heroControlForeground,
-      disabledForegroundColor: Colors.white,
-      side: const BorderSide(color: DashboardColors.heroControlBorder),
-      overlayColor: DashboardColors.heroControlForeground.withValues(
-        alpha: 0.08,
-      ),
-      iconSize: 18,
-    );
-
-    return FilledButton.icon(
-      onPressed: isRefreshing ? null : () => ref.monitorActions.refresh(),
-      style: refreshButtonStyle,
-      icon: Icon(isRefreshing ? Icons.sync : Icons.refresh),
-      label: Text(isRefreshing ? 'Refreshing' : 'Refresh'),
     );
   }
 }
