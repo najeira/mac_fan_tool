@@ -186,7 +186,8 @@ final class RunnerTests: XCTestCase {
         return connectionAttempts == 0 ? timedOutConnection : recoveredConnection
       },
       serviceReadinessChecker: NoOpServiceReadinessChecker(),
-      serviceRecovery: recovery
+      serviceRecovery: recovery,
+      sleep: { _ in }
     )
 
     XCTAssertNoThrow(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450))
@@ -209,7 +210,8 @@ final class RunnerTests: XCTestCase {
       environmentResolver: { testEnvironment },
       connectionFactory: { _ in connection },
       serviceReadinessChecker: NoOpServiceReadinessChecker(),
-      serviceRecovery: recovery
+      serviceRecovery: recovery,
+      sleep: { _ in }
     )
 
     XCTAssertThrowsError(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450)) { error in
@@ -218,6 +220,48 @@ final class RunnerTests: XCTestCase {
         .connectionFailed("Timed out while waiting for the privileged helper.")
       )
     }
+    XCTAssertEqual(
+      recovery.recoverCalls,
+      [.connectionFailed("Timed out while waiting for the privileged helper.")]
+    )
+  }
+
+  func testSetFanTargetRpmRetriesMultipleTimesAfterRecoveryWhileHelperWarmsUp() throws {
+    let timedOutConnection = FakeFanControlConnection(
+      remote: FakeFanControlRemote(
+        applyManualTargetRpmHandler: { _, _, _ in }
+      )
+    )
+    let warmingUpConnection = FakeFanControlConnection(
+      remote: FakeFanControlRemote(
+        applyManualTargetRpmHandler: { _, _, _ in }
+      )
+    )
+    let readyConnection = FakeFanControlConnection(
+      remote: FakeFanControlRemote(
+        applyManualTargetRpmHandler: { _, targetRpm, reply in
+          XCTAssertEqual(targetRpm, 2450)
+          reply(nil)
+        }
+      )
+    )
+    let recovery = OneShotServiceRecovery()
+    let connections = [timedOutConnection, warmingUpConnection, readyConnection]
+    var connectionAttempts = 0
+    let client = FanControlHelperClient(
+      commandTimeout: .milliseconds(50),
+      environmentResolver: { testEnvironment },
+      connectionFactory: { _ in
+        defer { connectionAttempts += 1 }
+        return connections[min(connectionAttempts, connections.count - 1)]
+      },
+      serviceReadinessChecker: NoOpServiceReadinessChecker(),
+      serviceRecovery: recovery,
+      sleep: { _ in }
+    )
+
+    XCTAssertNoThrow(try client.setFanTargetRpm(fanId: "fan-1", targetRpm: 2450))
+    XCTAssertEqual(connectionAttempts, 3)
     XCTAssertEqual(
       recovery.recoverCalls,
       [.connectionFailed("Timed out while waiting for the privileged helper.")]

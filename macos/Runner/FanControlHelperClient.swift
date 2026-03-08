@@ -4,6 +4,11 @@ import ServiceManagement
 
 /// アプリ本体から特権ヘルパーの登録、接続、コマンド実行を仲介するクライアントです。
 final class FanControlHelperClient {
+  private enum ConnectionRecoveryPolicy {
+    static let retryCountAfterRecovery = 3
+    static let retryDelay: TimeInterval = 0.2
+  }
+
   static let shared = FanControlHelperClient()
 
   typealias EnvironmentResolver = () throws -> ResolvedEnvironment
@@ -14,19 +19,22 @@ final class FanControlHelperClient {
   private let connectionFactory: ConnectionFactory?
   private let serviceReadinessChecker: FanControlServiceReadinessChecking
   private let serviceRecovery: FanControlServiceRecovering
+  private let sleep: (TimeInterval) -> Void
 
   init(
     commandTimeout: DispatchTimeInterval = .seconds(10),
     environmentResolver: EnvironmentResolver? = nil,
     connectionFactory: ConnectionFactory? = nil,
     serviceReadinessChecker: FanControlServiceReadinessChecking = SMAppServiceReadinessChecker(),
-    serviceRecovery: FanControlServiceRecovering = SMAppServiceRecovery()
+    serviceRecovery: FanControlServiceRecovering = SMAppServiceRecovery(),
+    sleep: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
   ) {
     self.commandTimeout = commandTimeout
     self.environmentResolver = environmentResolver
     self.connectionFactory = connectionFactory
     self.serviceReadinessChecker = serviceReadinessChecker
     self.serviceRecovery = serviceRecovery
+    self.sleep = sleep
   }
 
   /// 現在の環境でファン制御 UI を有効化してよいかを判定します。
@@ -204,17 +212,35 @@ final class FanControlHelperClient {
   ) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
     let environment = try commandEnvironment()
-    do {
-      try performCommand(environment: environment) { remote, reply in
-        command(remote, reply, fanIndex)
-      }
-    } catch let error as FanControlHelperClientError {
-      guard try serviceRecovery.recover(environment: environment, after: error) else {
-        throw error
-      }
 
-      try performCommand(environment: environment) { remote, reply in
-        command(remote, reply, fanIndex)
+    var hasRecovered = false
+    var retriesRemaining = 0
+
+    while true {
+      do {
+        try performCommand(environment: environment) { remote, reply in
+          command(remote, reply, fanIndex)
+        }
+        return
+      } catch let error as FanControlHelperClientError {
+        guard case .connectionFailed = error else {
+          throw error
+        }
+
+        if !hasRecovered {
+          guard try serviceRecovery.recover(environment: environment, after: error) else {
+            throw error
+          }
+          hasRecovered = true
+          retriesRemaining = ConnectionRecoveryPolicy.retryCountAfterRecovery
+        }
+
+        guard retriesRemaining > 0 else {
+          throw error
+        }
+
+        retriesRemaining -= 1
+        sleep(ConnectionRecoveryPolicy.retryDelay)
       }
     }
   }
