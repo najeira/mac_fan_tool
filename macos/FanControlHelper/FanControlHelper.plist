@@ -7,7 +7,7 @@
 		<string>placeholder.bundle.id</string>
 	</array>
 	<key>BundleProgram</key>
-	<string>Contents/Library/LaunchServices/FanControlHelper</string>
+	<string>Contents/Library/HelperTools/FanControlHelper</string>
 	<key>Label</key>
 	<string>placeholder.fancontrol.helper</string>
 	<key>MachServices</key>
