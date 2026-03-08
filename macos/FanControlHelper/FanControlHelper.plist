@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>BundleProgram</key>
-	<string>Contents/Library/HelperTools/FanControlHelper</string>
 	<key>AssociatedBundleIdentifiers</key>
 	<string>placeholder.bundle.id</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/FanControlHelper</string>
 	<key>Label</key>
 	<string>placeholder.fancontrol.helper</string>
 	<key>MachServices</key>
@@ -15,7 +15,7 @@
 	</dict>
 	<key>ProgramArguments</key>
 	<array>
-		<string>FanControlHelper</string>
+		<string>Contents/MacOS/FanControlHelper</string>
 	</array>
 	<key>RunAtLoad</key>
 	<false/>
