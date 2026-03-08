@@ -7,7 +7,6 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_state.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_view.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
-import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
 
 class HeroPanel extends StatelessWidget {
   const HeroPanel({super.key});
@@ -30,11 +29,7 @@ class HeroPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const _ViewSwitcher(),
-            ],
-          ),
+          Row(children: [const _ViewSwitcher()]),
           const SizedBox(height: 18),
           const _HeroStatusChips(),
         ],
@@ -121,14 +116,13 @@ class _OverallTemperatureChip extends ConsumerWidget {
     final overallTemperature = ref.watch(
       summaryProvider.select((summary) => summary.overallTemperature),
     );
-    final thermalLevel = ref.watch(
-      monitorSnapshotProvider.select((snapshot) => snapshot.thermalLevel),
-    );
+    final assessment = ref.watch(appThermalAssessmentProvider);
 
     return PillChip(
       icon: Icons.device_thermostat,
-      label: formatTemperature(overallTemperature),
-      color: thermalChipColor(thermalLevel),
+      label:
+          '${formatTemperature(overallTemperature)} ${appThermalLabel(assessment.level)}',
+      color: appThermalChipColor(assessment.level),
       foreground: Theme.of(context).colorScheme.onPrimary,
     );
   }

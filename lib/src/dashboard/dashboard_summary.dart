@@ -1,5 +1,5 @@
-import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
+import 'package:mac_fan_tool/src/hardware/sensor_groups.dart';
 
 class DashboardSummary {
   const DashboardSummary({

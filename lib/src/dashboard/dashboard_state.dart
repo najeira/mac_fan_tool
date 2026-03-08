@@ -5,6 +5,7 @@ import 'package:mac_fan_tool/src/dashboard/dashboard_debug.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_support.dart';
 import 'package:mac_fan_tool/src/dashboard/dashboard_summary.dart';
 import 'package:mac_fan_tool/src/dashboard/thermal_trend.dart';
+import 'package:mac_fan_tool/src/hardware/thermal_assessment.dart';
 import 'package:mac_fan_tool/src/dashboard/widgets/dashboard_common.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_controller.dart';
 import 'package:mac_fan_tool/src/hardware/hardware_models.dart';
@@ -158,6 +159,12 @@ final supportingSensorReadingsProvider =
 final thermalTrendProvider = Provider<ThermalTrendModel>((ref) {
   final history = ref.watch(monitorHistoryProvider);
   return ThermalTrendModel.fromHistory(history);
+});
+
+final appThermalAssessmentProvider = Provider<AppThermalAssessment>((ref) {
+  final snapshot = ref.watch(monitorSnapshotProvider);
+  final history = ref.watch(monitorHistoryProvider);
+  return assessThermalState(snapshot, history: history);
 });
 
 final hardwareNoteProvider = Provider<String?>((ref) {
