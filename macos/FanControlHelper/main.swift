@@ -49,6 +49,7 @@ private struct CodeSignatureDetails {
   let teamIdentifier: String?
 }
 
+/// 実行中のヘルパープロセス自身のコード署名情報を読み取り、接続元検証に使う値を返します。
 private func currentProcessSignature() throws -> CodeSignatureDetails {
   var dynamicCode: SecCode?
   let status = SecCodeCopySelf([], &dynamicCode)

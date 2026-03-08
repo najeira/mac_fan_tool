@@ -1,6 +1,7 @@
 import Dispatch
 import Foundation
 
+/// 特権ヘルパー側で XPC リクエストを受け取り、SMC へのファン制御を書き込むサービスです。
 final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControlXPCProtocol {
   typealias Logger = (String) -> Void
 
@@ -51,6 +52,7 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     }
   }
 
+  /// 受信した XPC 接続に公開インターフェースを設定して処理可能にします。
   func listener(
     _ listener: NSXPCListener,
     shouldAcceptNewConnection newConnection: NSXPCConnection
@@ -61,6 +63,7 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     return true
   }
 
+  /// 指定したファンの制御モードを自動または手動へ切り替えます。
   func setFanMode(
     _ fanIndex: Int,
     modeRawValue: Int,
@@ -83,6 +86,7 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     }
   }
 
+  /// 指定したファンを手動制御に切り替えたうえで目標 RPM をまとめて適用します。
   func applyManualTargetRpm(
     _ fanIndex: Int,
     targetRpm: Int,
@@ -100,6 +104,7 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     }
   }
 
+  /// 手動ファン制御の期限を延長し、自動復帰を防ぎます。
   func renewManualLease(
     _ fanIndex: Int,
     withReply reply: @escaping (String?) -> Void

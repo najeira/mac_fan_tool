@@ -1,5 +1,6 @@
 #import "HardwareSensorBridge.h"
 
+/// IOHID の検索条件に一致するサービスを作成して温度センサー値を収集します。
 NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensors(int32_t page, int32_t usage, int32_t type) {
     NSDictionary *dictionary = @{
         @"PrimaryUsagePage": @(page),
@@ -17,6 +18,7 @@ NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensors(int32_t pag
     return result;
 }
 
+/// IOHID サービスを走査し、取得できた温度イベントをセンサー名ごとに平均化します。
 NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensorsFromSystemClient(IOHIDEventSystemClientRef system, int32_t type) {
     if (system == nil) {
         return @{};

@@ -145,6 +145,7 @@ private extension Float {
   }
 }
 
+/// AppleSMC への接続を管理し、キーの読み書きを直列化して行う低レベルラッパーです。
 private final class AppleSMCConnection: AppleSMCControlling {
   private let lock = NSLock()
   private var connection: io_connect_t = 0
@@ -196,6 +197,7 @@ private final class AppleSMCConnection: AppleSMCControlling {
     }
   }
 
+  /// 指定した SMC キーの数値を読み取り、必要に応じてゼロ値を無効扱いにします。
   func value(for key: String, allowZero: Bool = false) -> Double? {
     lock.lock()
     defer {
@@ -213,6 +215,7 @@ private final class AppleSMCConnection: AppleSMCControlling {
     return decode(value: value)
   }
 
+  /// 指定した SMC キーの整数値を読み取ります。
   func integerValue(for key: String, allowZero: Bool = false) -> UInt32? {
     lock.lock()
     defer {
@@ -230,6 +233,7 @@ private final class AppleSMCConnection: AppleSMCControlling {
     return try? decodeInteger(value: value)
   }
 
+  /// 指定した SMC キーが数値書き込みに対応しているかを確認します。
   func canWriteNumeric(for key: String) -> Bool {
     lock.lock()
     defer {
@@ -243,6 +247,7 @@ private final class AppleSMCConnection: AppleSMCControlling {
     return supportsNumericEncoding(value: value)
   }
 
+  /// 指定した SMC キーが整数書き込みに対応しているかを確認します。
   func canWriteInteger(for key: String) -> Bool {
     lock.lock()
     defer {
@@ -256,6 +261,7 @@ private final class AppleSMCConnection: AppleSMCControlling {
     return supportsIntegerEncoding(value: value)
   }
 
+  /// 指定した SMC キーへ数値を書き込みます。
   func writeNumeric(_ numericValue: Double, for key: String) throws {
     lock.lock()
     defer {
@@ -270,6 +276,7 @@ private final class AppleSMCConnection: AppleSMCControlling {
     try writeLocked(bytes, using: value)
   }
 
+  /// 指定した SMC キーへ整数値を書き込みます。
   func writeInteger(_ integerValue: UInt32, for key: String) throws {
     lock.lock()
     defer {
@@ -284,6 +291,7 @@ private final class AppleSMCConnection: AppleSMCControlling {
     try writeLocked(bytes, using: value)
   }
 
+  /// 現在の整数値を読み取って変換し、その結果を書き戻します。
   func updateInteger(for key: String, transform: (UInt32) -> UInt32) throws {
     lock.lock()
     defer {

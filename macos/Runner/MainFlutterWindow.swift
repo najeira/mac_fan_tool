@@ -1,6 +1,7 @@
 import Cocoa
 import FlutterMacOS
 
+/// Flutter ビューとネイティブのハードウェア API を結び付けるメインウィンドウです。
 class MainFlutterWindow: NSWindow {
   private let hardwareBridge = HardwareBridge()
 

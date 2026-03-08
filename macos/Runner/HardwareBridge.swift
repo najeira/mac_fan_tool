@@ -4,7 +4,9 @@ import Foundation
 import IOKit
 import IOKit.hidsystem
 
+/// Objective-C ブリッジ経由の温度センサー読み取り結果を Swift で扱いやすい形へ変換します。
 enum HardwareSensorBridgeSupport {
+  /// IOHID クライアントから取得した温度センサー値をセンサー名ごとの辞書へ整形します。
   static func temperatureValuesForSystemClient(
     _ systemClient: IOHIDEventSystemClient?,
     type: Int32 = kIOHIDEventTypeTemperature
@@ -280,6 +282,7 @@ private extension Float {
   }
 }
 
+/// Runner 側で AppleSMC の値を参照し、センサー情報やファン情報を取得する接続です。
 private final class AppleSMCConnection {
   private let lock = NSLock()
   private var connection: io_connect_t = 0
@@ -327,6 +330,7 @@ private final class AppleSMCConnection {
     }
   }
 
+  /// 指定した SMC キーの数値を読み取ります。
   func value(for key: String, allowZero: Bool = false) -> Double? {
     lock.lock()
     defer {
@@ -344,6 +348,7 @@ private final class AppleSMCConnection {
     return decode(value: value)
   }
 
+  /// 指定した SMC キーの整数値を読み取ります。
   func integerValue(for key: String, allowZero: Bool = false) -> UInt32? {
     lock.lock()
     defer {
@@ -361,6 +366,7 @@ private final class AppleSMCConnection {
     return try? decodeInteger(value: value)
   }
 
+  /// 指定した SMC キーが数値書き込みに対応しているかを返します。
   func canWriteNumeric(for key: String) -> Bool {
     lock.lock()
     defer {
@@ -374,6 +380,7 @@ private final class AppleSMCConnection {
     return supportsNumericEncoding(value: value)
   }
 
+  /// 指定した SMC キーが整数書き込みに対応しているかを返します。
   func canWriteInteger(for key: String) -> Bool {
     lock.lock()
     defer {
@@ -603,6 +610,7 @@ private enum SMCReadError: Error {
   case unsupportedDataType(key: String, dataType: String)
 }
 
+/// Apple Silicon のセンサー情報とファン情報を収集し、UI 向けのデータへ整形します。
 private final class AppleSiliconHardwareMonitor {
   private enum CpuThermalStrategy {
     case smcOnly
@@ -636,6 +644,7 @@ private final class AppleSiliconHardwareMonitor {
     }
   }
 
+  /// 利用可能なセンサーとファン制御機能からアプリの能力情報を組み立てます。
   func capabilities() -> HardwareCapabilitiesData {
     guard Sysctl.isAppleSilicon else {
       return HardwareCapabilitiesData(
@@ -684,6 +693,7 @@ private final class AppleSiliconHardwareMonitor {
     )
   }
 
+  /// 現在の熱状態、センサー値、ファン状態を 1 つのスナップショットとして返します。
   func snapshot(thermalState: ThermalStateData) -> HardwareSnapshotData {
     guard Sysctl.isAppleSilicon else {
       return HardwareSnapshotData(
@@ -717,10 +727,12 @@ private final class AppleSiliconHardwareMonitor {
     )
   }
 
+  /// 指定ファンのモード変更を特権ヘルパーへ委譲します。
   func setFanMode(fanId: String, mode: FanModeData) throws {
     try FanControlHelperClient.shared.setFanMode(fanId: fanId, mode: mode)
   }
 
+  /// 指定ファンの目標 RPM 変更を特権ヘルパーへ委譲します。
   func setFanTargetRpm(fanId: String, targetRpm: Int64) throws {
     try FanControlHelperClient.shared.setFanTargetRpm(
       fanId: fanId,
@@ -728,6 +740,7 @@ private final class AppleSiliconHardwareMonitor {
     )
   }
 
+  /// 手動ファン制御リースの更新を特権ヘルパーへ委譲します。
   func renewManualFanLease(fanId: String) throws {
     try FanControlHelperClient.shared.renewManualLease(fanId: fanId)
   }
@@ -1292,17 +1305,21 @@ private final class AppleSiliconHardwareMonitor {
   ]
 }
 
+/// Flutter からのハードウェア API 呼び出しを macOS 実装へ橋渡しします。
 final class HardwareBridge: HardwareHostApi {
   private let monitor = AppleSiliconHardwareMonitor()
 
+  /// この Mac で利用できるハードウェア機能の一覧を返します。
   func getCapabilities() throws -> HardwareCapabilitiesData {
     monitor.capabilities()
   }
 
+  /// 現在のセンサー値とファン状態のスナップショットを返します。
   func getSnapshot() throws -> HardwareSnapshotData {
     monitor.snapshot(thermalState: mapThermalState(ProcessInfo.processInfo.thermalState))
   }
 
+  /// Flutter から受け取ったファンモード変更要求をネイティブ側で実行します。
   func setFanMode(fanId: String, mode: FanModeData) throws {
     do {
       try monitor.setFanMode(fanId: fanId, mode: mode)
@@ -1321,6 +1338,7 @@ final class HardwareBridge: HardwareHostApi {
     }
   }
 
+  /// Flutter から受け取った目標 RPM 変更要求をネイティブ側で実行します。
   func setFanTargetRpm(fanId: String, targetRpm: Int64) throws {
     do {
       try monitor.setFanTargetRpm(fanId: fanId, targetRpm: targetRpm)
@@ -1339,6 +1357,7 @@ final class HardwareBridge: HardwareHostApi {
     }
   }
 
+  /// Flutter から受け取った手動制御リース更新要求をネイティブ側で実行します。
   func renewManualFanLease(fanId: String) throws {
     do {
       try monitor.renewManualFanLease(fanId: fanId)

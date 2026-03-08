@@ -2,6 +2,7 @@ import Foundation
 import Security
 import ServiceManagement
 
+/// アプリ本体から特権ヘルパーの登録、接続、コマンド実行を仲介するクライアントです。
 final class FanControlHelperClient {
   static let shared = FanControlHelperClient()
 
@@ -25,6 +26,7 @@ final class FanControlHelperClient {
     self.serviceReadinessChecker = serviceReadinessChecker
   }
 
+  /// 現在の環境でファン制御 UI を有効化してよいかを判定します。
   func canControlFans(isFanControlSupported: Bool) -> Bool {
     guard isFanControlSupported else {
       return false
@@ -45,6 +47,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// ヘルパーの登録状態に応じて UI 表示用の補足メッセージを返します。
   func statusNote(isFanControlSupported: Bool) -> String? {
     guard isFanControlSupported else {
       return nil
@@ -69,6 +72,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// ファン ID をヘルパー用のインデックスへ変換してモード変更を依頼します。
   func setFanMode(fanId: String, mode: FanModeData) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
     let environment = try commandEnvironment()
@@ -77,6 +81,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// ファン ID をヘルパー用のインデックスへ変換して目標 RPM を設定します。
   func setFanTargetRpm(fanId: String, targetRpm: Int64) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
     let requestedTarget = Int(targetRpm)
@@ -87,6 +92,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// 手動ファン制御リースの期限延長をヘルパーへ依頼します。
   func renewManualLease(fanId: String) throws {
     let fanIndex = try resolvedFanIndex(from: fanId)
     let environment = try commandEnvironment()
@@ -126,6 +132,7 @@ final class FanControlHelperClient {
     }
   }
 
+  /// XPC 接続を 1 回開いてコマンドを実行し、同期的に応答を待ちます。
   func performCommand(
     environment: ResolvedEnvironment,
     _ work: (FanControlXPCProtocol, @escaping (String?) -> Void) -> Void
@@ -373,6 +380,7 @@ final class FanControlHelperClient {
   }
 }
 
+/// ヘルパークライアントが UI やブリッジへ返す失敗理由です。
 enum FanControlHelperClientError: Error, Equatable {
   case unsupportedOS
   case invalidFanId(String)
@@ -419,7 +427,9 @@ private enum HelperAvailability {
   case available(ResolvedEnvironment, HelperServiceStatus)
 }
 
+/// 特権ヘルパーがコマンドを受け付けられる状態かを確認する抽象化です。
 protocol FanControlServiceReadinessChecking {
+  /// 必要に応じて登録や承認状態を確認し、実行可能でなければエラーにします。
   func ensureReady(environment: ResolvedEnvironment) throws
 }
 
@@ -562,6 +572,7 @@ private enum HelperServiceStatus {
   case unknown
 }
 
+/// 特権ヘルパー接続に必要な設定と署名要件を束ねた実行環境です。
 struct ResolvedEnvironment {
   let configuration: FanControlHelperConfiguration
   let helperRequirement: String
@@ -582,15 +593,20 @@ private struct CodeSignatureDetails {
   }
 }
 
+/// NSXPCConnection を差し替え可能にするための軽量インターフェースです。
 protocol FanControlXPCConnection: AnyObject {
   var invalidationHandler: (() -> Void)? { get set }
   var interruptionHandler: (() -> Void)? { get set }
 
+  /// XPC 接続を開始します。
   func resume()
+  /// XPC 接続を破棄します。
   func invalidate()
+  /// エラーハンドラ付きでリモートプロキシを取得します。
   func remoteObjectProxy(errorHandler: @escaping (Error) -> Void) -> FanControlXPCProtocol?
 }
 
+/// 特権ヘルパーへの NSXPCConnection を生成する本番実装です。
 private final class FanControlNSXPCConnection: FanControlXPCConnection {
   private let connection: NSXPCConnection
 
@@ -615,24 +631,29 @@ private final class FanControlNSXPCConnection: FanControlXPCConnection {
     set { connection.interruptionHandler = newValue }
   }
 
+  /// XPC 接続を有効化して通信を開始します。
   func resume() {
     connection.resume()
   }
 
+  /// 使用後の XPC 接続を閉じます。
   func invalidate() {
     connection.invalidate()
   }
 
+  /// ヘルパーの XPC プロキシを取得します。
   func remoteObjectProxy(errorHandler: @escaping (Error) -> Void) -> FanControlXPCProtocol? {
     connection.remoteObjectProxyWithErrorHandler(errorHandler) as? FanControlXPCProtocol
   }
 }
 
+/// 非同期の XPC 応答を同期的に待ち合わせるためのユーティリティです。
 private final class XPCCommandAwaiter {
   private let lock = NSLock()
   private let semaphore = DispatchSemaphore(value: 0)
   private var result: Result<Void, FanControlHelperClientError>?
 
+  /// 最初に受け取った結果だけを確定させて待機中の処理へ通知します。
   func complete(_ result: Result<Void, FanControlHelperClientError>) {
     lock.lock()
     defer {
@@ -647,6 +668,7 @@ private final class XPCCommandAwaiter {
     semaphore.signal()
   }
 
+  /// タイムアウトまで応答を待ち、完了結果に応じて成功または失敗を返します。
   func wait(timeout: DispatchTime) throws {
     if semaphore.wait(timeout: timeout) == .timedOut {
       throw FanControlHelperClientError.connectionFailed(

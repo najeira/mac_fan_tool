@@ -21,5 +21,7 @@ IOHIDEventRef IOHIDServiceClientCopyEvent(IOHIDServiceClientRef service, int64_t
 CFTypeRef IOHIDServiceClientCopyProperty(IOHIDServiceClientRef service, CFStringRef property);
 IOHIDFloat IOHIDEventGetFloatValue(IOHIDEventRef event, int32_t field);
 
+/// IOHID の検索条件を指定して Apple Silicon の温度センサー値を取得します。
 NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensors(int32_t page, int32_t usage, int32_t type);
+/// 既存の IOHID クライアントから温度イベントを読み取り、センサー名ごとの平均値を返します。
 NSDictionary<NSString *, NSNumber *> *AppleSiliconTemperatureSensorsFromSystemClient(IOHIDEventSystemClientRef client, int32_t type);

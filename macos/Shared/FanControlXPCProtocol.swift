@@ -1,6 +1,7 @@
 import Dispatch
 import Foundation
 
+/// アプリ本体と特権ヘルパーで共有するバンドル識別子やサービス名を組み立てます。
 struct FanControlHelperConfiguration {
   static let helperBundleSuffix = ".FanControlHelper"
   static let machServiceSuffix = ".fancontrol.helper"
@@ -38,12 +39,14 @@ struct FanControlHelperConfiguration {
   }
 }
 
+/// 指定したバンドル ID とチーム ID からコード署名要件文字列を生成します。
 enum CodeSigningRequirementBuilder {
   static func requirement(identifier: String, teamIdentifier: String) -> String {
     "identifier \"\(identifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
   }
 }
 
+/// 複数の SMC 書き込み結果を検証し、失敗があれば最初のエラーを返します。
 enum FanControlWriteResultValidator {
   static func validate<E: Error>(
     _ results: [Result<Void, E>],
@@ -61,11 +64,13 @@ enum FanControlWriteResultValidator {
   }
 }
 
+/// AppleSMC が受け付けるファン制御モードを表します。
 enum AppleSMCFanMode: Int {
   case automatic = 0
   case manual = 1
 }
 
+/// 手動ファン制御の有効期限をファン単位で管理するタイマーです。
 final class ManualFanLeaseController {
   typealias ExpirationHandler = (Int) -> Void
 
@@ -84,12 +89,14 @@ final class ManualFanLeaseController {
     self.expirationHandler = expirationHandler
   }
 
+  /// 指定したファンの期限タイマーを開始または再設定します。
   func arm(for fanIndex: Int) {
     queue.sync {
       scheduleLocked(for: fanIndex)
     }
   }
 
+  /// 既存の期限タイマーを延長し、未管理のファンなら失敗を返します。
   @discardableResult
   func renew(for fanIndex: Int) -> Bool {
     queue.sync {
@@ -102,6 +109,7 @@ final class ManualFanLeaseController {
     }
   }
 
+  /// 指定したファンの期限タイマーを停止します。
   func cancel(for fanIndex: Int) {
     queue.sync {
       cancelLocked(for: fanIndex)
@@ -134,20 +142,30 @@ final class ManualFanLeaseController {
   }
 }
 
+/// AppleSMC キーの読み書きに必要な最小 API を抽象化します。
 protocol AppleSMCControlling: AnyObject {
+  /// 指定キーの数値を読み取ります。
   func value(for key: String, allowZero: Bool) -> Double?
+  /// 指定キーの整数値を読み取ります。
   func integerValue(for key: String, allowZero: Bool) -> UInt32?
+  /// 指定キーが数値書き込み可能かを返します。
   func canWriteNumeric(for key: String) -> Bool
+  /// 指定キーが整数書き込み可能かを返します。
   func canWriteInteger(for key: String) -> Bool
+  /// 指定キーへ数値を書き込みます。
   func writeNumeric(_ numericValue: Double, for key: String) throws
+  /// 指定キーへ整数を書き込みます。
   func writeInteger(_ integerValue: UInt32, for key: String) throws
+  /// 指定キーの整数値を読み取って変換し、結果を書き戻します。
   func updateInteger(for key: String, transform: (UInt32) -> UInt32) throws
 }
 
+/// ファン制御を行えるハードウェア条件を判定するための抽象化です。
 protocol FanControlPlatformChecking {
   var isAppleSilicon: Bool { get }
 }
 
+/// ファン制御処理でユーザー向けに返す失敗理由をまとめたエラーです。
 enum AppleSMCFanControlError: Error {
   case unsupportedPlatform
   case smcUnavailable(String)
@@ -224,6 +242,7 @@ private struct FanTargetSnapshot {
   let value: Int
 }
 
+/// Apple Silicon の AppleSMC を通じてファンモードと目標 RPM を安全に更新します。
 final class AppleSMCFanController: FanControlControlling {
   private let smc: AppleSMCControlling
   private let platform: FanControlPlatformChecking
@@ -233,6 +252,7 @@ final class AppleSMCFanController: FanControlControlling {
     self.platform = platform
   }
 
+  /// 指定ファンのモードを自動または手動へ変更します。
   func setFanMode(index: Int, mode: AppleSMCFanMode) throws {
     try validateWritableFan(index)
     let snapshot = try captureModeSnapshot(for: index)
@@ -246,6 +266,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// 指定ファンの目標 RPM を現在のモードのまま更新します。
   func setFanTargetRpm(index: Int, targetRpm: Int) throws {
     try validateWritableFan(index)
 
@@ -262,6 +283,7 @@ final class AppleSMCFanController: FanControlControlling {
     }
   }
 
+  /// 指定ファンを手動モードへ切り替えつつ目標 RPM を一括適用します。
   func applyManualTargetRpm(index: Int, targetRpm: Int) throws {
     try validateWritableFan(index)
 
@@ -542,24 +564,31 @@ final class AppleSMCFanController: FanControlControlling {
   }
 }
 
+/// ヘルパーサービスが実装すべきファン制御操作です。
 protocol FanControlControlling: AnyObject {
+  /// ファンモードを書き換えます。
   func setFanMode(index: Int, mode: AppleSMCFanMode) throws
+  /// 手動モードと目標 RPM をまとめて適用します。
   func applyManualTargetRpm(index: Int, targetRpm: Int) throws
 }
 
+/// アプリ本体から特権ヘルパーを呼び出すための XPC インターフェースです。
 @objc protocol FanControlXPCProtocol {
+  /// 指定ファンのモードを変更します。
   func setFanMode(
     _ fanIndex: Int,
     modeRawValue: Int,
     withReply reply: @escaping (String?) -> Void
   )
 
+  /// 指定ファンへ手動目標 RPM を適用します。
   func applyManualTargetRpm(
     _ fanIndex: Int,
     targetRpm: Int,
     withReply reply: @escaping (String?) -> Void
   )
 
+  /// 指定ファンの手動制御リースを延長します。
   func renewManualLease(
     _ fanIndex: Int,
     withReply reply: @escaping (String?) -> Void

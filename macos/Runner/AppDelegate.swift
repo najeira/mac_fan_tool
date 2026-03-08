@@ -2,6 +2,7 @@ import Cocoa
 import FlutterMacOS
 
 @main
+/// メインウィンドウとメニューバー常駐の振る舞いを管理する macOS アプリデリゲートです。
 class AppDelegate: FlutterAppDelegate {
   static var shared: AppDelegate? {
     NSApp.delegate as? AppDelegate
@@ -41,6 +42,7 @@ class AppDelegate: FlutterAppDelegate {
     return true
   }
 
+  /// メインウィンドウを閉じる代わりに非表示へ切り替え、常駐動作を維持します。
   @discardableResult
   func interceptMainWindowClose(_ window: NSWindow) -> Bool {
     guard !isQuitting else {
