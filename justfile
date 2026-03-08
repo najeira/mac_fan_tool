@@ -14,10 +14,10 @@ dmg_stage_dir := dist_dir + "/" + app_name + "-dmg"
 temp_dmg_file := dist_dir + "/" + app_name + "-temp.dmg"
 release_dmg_file := dist_dir + "/" + app_name + ".dmg"
 frameworks_dir := app_file + "/Contents/Frameworks"
-helper_file := app_file + "/Contents/Library/HelperTools/FanControlHelper"
+helper_file := app_file + "/Contents/Library/LaunchServices/FanControlHelper"
 launch_daemon_plist := app_file + "/Contents/Library/LaunchDaemons/FanControlHelper.plist"
 installed_app_file := "/Applications/" + app_name + ".app"
-installed_helper_file := installed_app_file + "/Contents/Library/HelperTools/FanControlHelper"
+installed_helper_file := installed_app_file + "/Contents/Library/LaunchServices/FanControlHelper"
 
 default:
   just --list
