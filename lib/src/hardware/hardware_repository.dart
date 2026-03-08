@@ -133,4 +133,14 @@ class HardwareRepository {
       throw StateError(error.toString());
     }
   }
+
+  Future<void> renewManualFanLease(String fanId) async {
+    try {
+      await _api.renewManualFanLease(fanId);
+    } on PlatformException catch (error) {
+      throw StateError(error.message ?? error.code);
+    } catch (error) {
+      throw StateError(error.toString());
+    }
+  }
 }

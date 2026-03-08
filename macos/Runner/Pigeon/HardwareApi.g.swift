@@ -405,6 +405,7 @@ protocol HardwareHostApi {
   func getSnapshot() throws -> HardwareSnapshotData
   func setFanMode(fanId: String, mode: FanModeData) throws
   func setFanTargetRpm(fanId: String, targetRpm: Int64) throws
+  func renewManualFanLease(fanId: String) throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -470,6 +471,21 @@ class HardwareHostApiSetup {
       }
     } else {
       setFanTargetRpmChannel.setMessageHandler(nil)
+    }
+    let renewManualFanLeaseChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.renewManualFanLease\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      renewManualFanLeaseChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let fanIdArg = args[0] as! String
+        do {
+          try api.renewManualFanLease(fanId: fanIdArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      renewManualFanLeaseChannel.setMessageHandler(nil)
     }
   }
 }

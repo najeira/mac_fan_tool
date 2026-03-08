@@ -56,4 +56,6 @@ abstract class HardwareHostApi {
   void setFanMode(String fanId, FanModeData mode);
 
   void setFanTargetRpm(String fanId, int targetRpm);
+
+  void renewManualFanLease(String fanId);
 }

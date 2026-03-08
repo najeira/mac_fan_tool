@@ -9,9 +9,9 @@ import 'package:flutter/foundation.dart' show ReadBuffer, WriteBuffer;
 import 'package:flutter/services.dart';
 
 Object? _extractReplyValueOrThrow(
-  List<Object?>? replyList,
-  String channelName, {
-  required bool isNullValid,
+    List<Object?>? replyList,
+    String channelName, {
+    required bool isNullValid,
 }) {
   if (replyList == null) {
     throw PlatformException(
@@ -36,29 +36,47 @@ Object? _extractReplyValueOrThrow(
 bool _deepEquals(Object? a, Object? b) {
   if (a is List && b is List) {
     return a.length == b.length &&
-        a.indexed.every(
-          ((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]),
-        );
+        a.indexed
+        .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
   }
   if (a is Map && b is Map) {
-    return a.length == b.length &&
-        a.entries.every(
-          (MapEntry<Object?, Object?> entry) =>
-              (b as Map<Object?, Object?>).containsKey(entry.key) &&
-              _deepEquals(entry.value, b[entry.key]),
-        );
+    return a.length == b.length && a.entries.every((MapEntry<Object?, Object?> entry) =>
+        (b as Map<Object?, Object?>).containsKey(entry.key) &&
+        _deepEquals(entry.value, b[entry.key]));
   }
   return a == b;
 }
 
-enum ThermalStateData { nominal, fair, serious, critical, unknown }
 
-enum SensorKindData { cpu, gpu, memory, ambient, other }
+enum ThermalStateData {
+  nominal,
+  fair,
+  serious,
+  critical,
+  unknown,
+}
 
-enum FanModeData { automatic, manual }
+enum SensorKindData {
+  cpu,
+  gpu,
+  memory,
+  ambient,
+  other,
+}
+
+enum FanModeData {
+  automatic,
+  manual,
+}
 
 class SensorReadingData {
-  SensorReadingData({this.id, this.name, this.unit, this.value, this.kind});
+  SensorReadingData({
+    this.id,
+    this.name,
+    this.unit,
+    this.value,
+    this.kind,
+  });
 
   String? id;
 
@@ -71,12 +89,17 @@ class SensorReadingData {
   SensorKindData? kind;
 
   List<Object?> _toList() {
-    return <Object?>[id, name, unit, value, kind];
+    return <Object?>[
+      id,
+      name,
+      unit,
+      value,
+      kind,
+    ];
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static SensorReadingData decode(Object result) {
     result as List<Object?>;
@@ -103,7 +126,8 @@ class SensorReadingData {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList());
+  int get hashCode => Object.hashAll(_toList())
+;
 }
 
 class FanReadingData {
@@ -144,8 +168,7 @@ class FanReadingData {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static FanReadingData decode(Object result) {
     result as List<Object?>;
@@ -174,7 +197,8 @@ class FanReadingData {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList());
+  int get hashCode => Object.hashAll(_toList())
+;
 }
 
 class HardwareCapabilitiesData {
@@ -207,8 +231,7 @@ class HardwareCapabilitiesData {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static HardwareCapabilitiesData decode(Object result) {
     result as List<Object?>;
@@ -224,8 +247,7 @@ class HardwareCapabilitiesData {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! HardwareCapabilitiesData ||
-        other.runtimeType != runtimeType) {
+    if (other is! HardwareCapabilitiesData || other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
@@ -236,7 +258,8 @@ class HardwareCapabilitiesData {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList());
+  int get hashCode => Object.hashAll(_toList())
+;
 }
 
 class HardwareSnapshotData {
@@ -259,12 +282,17 @@ class HardwareSnapshotData {
   String? note;
 
   List<Object?> _toList() {
-    return <Object?>[capturedAtEpochMs, thermalState, sensors, fans, note];
+    return <Object?>[
+      capturedAtEpochMs,
+      thermalState,
+      sensors,
+      fans,
+      note,
+    ];
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static HardwareSnapshotData decode(Object result) {
     result as List<Object?>;
@@ -291,8 +319,10 @@ class HardwareSnapshotData {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList());
+  int get hashCode => Object.hashAll(_toList())
+;
 }
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -301,25 +331,25 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    } else if (value is ThermalStateData) {
+    }    else if (value is ThermalStateData) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    } else if (value is SensorKindData) {
+    }    else if (value is SensorKindData) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    } else if (value is FanModeData) {
+    }    else if (value is FanModeData) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    } else if (value is SensorReadingData) {
+    }    else if (value is SensorReadingData) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    } else if (value is FanReadingData) {
+    }    else if (value is FanReadingData) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    } else if (value is HardwareCapabilitiesData) {
+    }    else if (value is HardwareCapabilitiesData) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    } else if (value is HardwareSnapshotData) {
+    }    else if (value is HardwareSnapshotData) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
@@ -357,13 +387,9 @@ class HardwareHostApi {
   /// Constructor for [HardwareHostApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  HardwareHostApi({
-    BinaryMessenger? binaryMessenger,
-    String messageChannelSuffix = '',
-  }) : pigeonVar_binaryMessenger = binaryMessenger,
-       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
-           ? '.$messageChannelSuffix'
-           : '';
+  HardwareHostApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
+      : pigeonVar_binaryMessenger = binaryMessenger,
+        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -371,8 +397,7 @@ class HardwareHostApi {
   final String pigeonVar_messageChannelSuffix;
 
   Future<HardwareCapabilitiesData> getCapabilities() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.getCapabilities$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.getCapabilities$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -382,16 +407,16 @@ class HardwareHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    )!;
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    !;
     return pigeonVar_replyValue as HardwareCapabilitiesData;
   }
 
   Future<HardwareSnapshotData> getSnapshot() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.getSnapshot$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.getSnapshot$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -401,50 +426,65 @@ class HardwareHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    )!;
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    !;
     return pigeonVar_replyValue as HardwareSnapshotData;
   }
 
   Future<void> setFanMode(String fanId, FanModeData mode) async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.setFanMode$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.setFanMode$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
-      <Object?>[fanId, mode],
-    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[fanId, mode]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
   Future<void> setFanTargetRpm(String fanId, int targetRpm) async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.setFanTargetRpm$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.setFanTargetRpm$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
-      <Object?>[fanId, targetRpm],
-    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[fanId, targetRpm]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> renewManualFanLease(String fanId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.mac_fan_tool.HardwareHostApi.renewManualFanLease$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
-      isNullValid: true,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
     );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[fanId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 }

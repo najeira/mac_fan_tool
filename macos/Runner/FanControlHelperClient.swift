@@ -87,6 +87,14 @@ final class FanControlHelperClient {
     }
   }
 
+  func renewManualLease(fanId: String) throws {
+    let fanIndex = try resolvedFanIndex(from: fanId)
+    let environment = try commandEnvironment()
+    try performCommand(environment: environment) { remote, reply in
+      remote.renewManualLease(fanIndex, withReply: reply)
+    }
+  }
+
   private func helperAvailability() -> HelperAvailability {
     do {
       let environment = try currentEnvironment()

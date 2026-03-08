@@ -133,6 +133,73 @@ void main() {
     },
   );
 
+  test('setFanTargetRpm starts manual lease heartbeats', () async {
+    final repository = _FakeHardwareRepository(
+      snapshots: [
+        _sampleSnapshot(),
+        _sampleSnapshot(mode: FanModeData.manual, targetRpm: 2400),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        hardwareRepositoryProvider.overrideWithValue(repository),
+        manualLeaseHeartbeatIntervalProvider.overrideWithValue(
+          const Duration(milliseconds: 10),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(monitorControllerProvider);
+    await _waitForBootstrap(container);
+
+    final controller = container.read(monitorControllerProvider.notifier);
+    final fan = container.read(monitorSnapshotProvider).fanReadings.single;
+
+    await controller.setFanTargetRpm(fan, 2400);
+    await Future<void>.delayed(const Duration(milliseconds: 35));
+
+    expect(repository.renewManualLeaseCalls, contains('fan-0'));
+  });
+
+  test('setFanAutomatic stops manual lease heartbeats', () async {
+    final repository = _FakeHardwareRepository(
+      snapshots: [
+        _sampleSnapshot(),
+        _sampleSnapshot(mode: FanModeData.manual, targetRpm: 2400),
+        _sampleSnapshot(),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        hardwareRepositoryProvider.overrideWithValue(repository),
+        manualLeaseHeartbeatIntervalProvider.overrideWithValue(
+          const Duration(milliseconds: 10),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(monitorControllerProvider);
+    await _waitForBootstrap(container);
+
+    final controller = container.read(monitorControllerProvider.notifier);
+    final fan = container.read(monitorSnapshotProvider).fanReadings.single;
+
+    await controller.setFanTargetRpm(fan, 2400);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final renewCallCountBeforeAutomatic =
+        repository.renewManualLeaseCalls.length;
+
+    await controller.setFanAutomatic(fan);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(
+      repository.renewManualLeaseCalls.length,
+      renewCallCountBeforeAutomatic,
+    );
+  });
+
   test('tracks multiple active fan commands independently', () async {
     final firstFanModeCompleter = Completer<void>();
     final secondFanModeCompleter = Completer<void>();
@@ -233,7 +300,14 @@ Future<void> _waitForBootstrap(ProviderContainer container) async {
   fail('MonitorController bootstrap did not finish in time.');
 }
 
-HardwareSnapshotData _sampleSnapshot() {
+HardwareSnapshotData _sampleSnapshot({
+  FanModeData mode = FanModeData.automatic,
+  int targetRpm = 2100,
+}) {
+  return _sampleSnapshotWithMode(mode, targetRpm);
+}
+
+HardwareSnapshotData _sampleSnapshotWithMode(FanModeData mode, int targetRpm) {
   return HardwareSnapshotData(
     capturedAtEpochMs: 1,
     thermalState: ThermalStateData.nominal,
@@ -245,8 +319,8 @@ HardwareSnapshotData _sampleSnapshot() {
         currentRpm: 2100,
         minimumRpm: 1200,
         maximumRpm: 4200,
-        targetRpm: 2100,
-        mode: FanModeData.automatic,
+        targetRpm: targetRpm,
+        mode: mode,
       ),
     ]),
   );
@@ -296,6 +370,7 @@ class _FakeHardwareRepository extends HardwareRepository {
   final Map<int, Completer<void>> loadSnapshotCompleters;
   final List<String> setFanModeCalls = <String>[];
   final List<(String, int)> setFanTargetRpmCalls = <(String, int)>[];
+  final List<String> renewManualLeaseCalls = <String>[];
   var _snapshotIndex = 0;
 
   @override
@@ -354,5 +429,10 @@ class _FakeHardwareRepository extends HardwareRepository {
     if (setFanTargetRpmError != null) {
       throw setFanTargetRpmError!;
     }
+  }
+
+  @override
+  Future<void> renewManualFanLease(String fanId) async {
+    renewManualLeaseCalls.add(fanId);
   }
 }

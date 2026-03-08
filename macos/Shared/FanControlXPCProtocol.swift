@@ -86,15 +86,19 @@ final class ManualFanLeaseController {
 
   func arm(for fanIndex: Int) {
     queue.sync {
-      cancelLocked(for: fanIndex)
+      scheduleLocked(for: fanIndex)
+    }
+  }
 
-      let timer = DispatchSource.makeTimerSource(queue: queue)
-      timer.schedule(deadline: .now() + duration)
-      timer.setEventHandler { [weak self] in
-        self?.expireLease(for: fanIndex)
+  @discardableResult
+  func renew(for fanIndex: Int) -> Bool {
+    queue.sync {
+      guard timers[fanIndex] != nil else {
+        return false
       }
-      timers[fanIndex] = timer
-      timer.resume()
+
+      scheduleLocked(for: fanIndex)
+      return true
     }
   }
 
@@ -115,6 +119,18 @@ final class ManualFanLeaseController {
     }
 
     timer.cancel()
+  }
+
+  private func scheduleLocked(for fanIndex: Int) {
+    cancelLocked(for: fanIndex)
+
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    timer.schedule(deadline: .now() + duration)
+    timer.setEventHandler { [weak self] in
+      self?.expireLease(for: fanIndex)
+    }
+    timers[fanIndex] = timer
+    timer.resume()
   }
 }
 
@@ -541,6 +557,11 @@ protocol FanControlControlling: AnyObject {
   func applyManualTargetRpm(
     _ fanIndex: Int,
     targetRpm: Int,
+    withReply reply: @escaping (String?) -> Void
+  )
+
+  func renewManualLease(
+    _ fanIndex: Int,
     withReply reply: @escaping (String?) -> Void
   )
 }

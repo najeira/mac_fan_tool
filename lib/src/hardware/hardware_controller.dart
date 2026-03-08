@@ -16,20 +16,41 @@ final transientNoticeDurationProvider = Provider<Duration>((ref) {
   return const Duration(seconds: 4);
 });
 
+final manualLeaseHeartbeatIntervalProvider = Provider<Duration>((ref) {
+  return const Duration(seconds: 30);
+});
+
 class MonitorController extends Notifier<MonitorState> {
   Timer? _pollTimer;
   Timer? _transientNoticeTimer;
+  Timer? _manualLeaseHeartbeatTimer;
   bool _refreshInFlight = false;
+  bool _manualLeaseRenewalInFlight = false;
+  bool _isDisposed = false;
+  final Set<String> _manualLeaseFanIds = <String>{};
+  late HardwareRepository _repositoryCache;
+  Duration _transientNoticeDuration = const Duration(seconds: 4);
+  Duration _manualLeaseHeartbeatInterval = const Duration(seconds: 30);
 
-  HardwareRepository get _repository => ref.read(hardwareRepositoryProvider);
-  Duration get _transientNoticeDuration =>
-      ref.read(transientNoticeDurationProvider);
+  HardwareRepository get _repository => _repositoryCache;
 
   @override
   MonitorState build() {
+    _isDisposed = false;
+    _repositoryCache = ref.read(hardwareRepositoryProvider);
+    _transientNoticeDuration = ref.read(transientNoticeDurationProvider);
+    _manualLeaseHeartbeatInterval = ref.read(
+      manualLeaseHeartbeatIntervalProvider,
+    );
     ref.onDispose(() {
+      _isDisposed = true;
       _pollTimer?.cancel();
+      _pollTimer = null;
       _transientNoticeTimer?.cancel();
+      _transientNoticeTimer = null;
+      _manualLeaseHeartbeatTimer?.cancel();
+      _manualLeaseHeartbeatTimer = null;
+      _manualLeaseFanIds.clear();
     });
     unawaited(_bootstrap());
     return MonitorState.initial();
@@ -42,6 +63,10 @@ class MonitorController extends Notifier<MonitorState> {
         _repository.loadCapabilities(),
       ]);
 
+      if (_isDisposed) {
+        return;
+      }
+
       state = state.copyWith(
         device: results[0] as DeviceMetadata,
         capabilities: results[1] as HardwareCapabilitiesData,
@@ -49,11 +74,18 @@ class MonitorController extends Notifier<MonitorState> {
       );
 
       await refresh(showSpinner: false);
+      if (_isDisposed) {
+        return;
+      }
 
       _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         unawaited(refresh(showSpinner: false));
       });
     } catch (error) {
+      if (_isDisposed) {
+        return;
+      }
+
       state = state.copyWith(
         isBootstrapping: false,
         errorMessage: 'Initialization failed: $error',
@@ -62,6 +94,10 @@ class MonitorController extends Notifier<MonitorState> {
   }
 
   Future<bool> refresh({bool showSpinner = true}) async {
+    if (_isDisposed) {
+      return false;
+    }
+
     if (_refreshInFlight) {
       return true;
     }
@@ -71,14 +107,23 @@ class MonitorController extends Notifier<MonitorState> {
 
     try {
       final snapshot = await _repository.loadSnapshot();
+      if (_isDisposed) {
+        return false;
+      }
+
       state = state.copyWith(
         snapshot: snapshot,
         history: _appendHistory(snapshot),
         isRefreshing: false,
         errorMessage: null,
       );
+      _pruneManualLeaseFanIds(snapshot);
       return true;
     } catch (error) {
+      if (_isDisposed) {
+        return false;
+      }
+
       state = state.copyWith(
         isRefreshing: false,
         errorMessage: 'Telemetry refresh failed: $error',
@@ -105,6 +150,7 @@ class MonitorController extends Notifier<MonitorState> {
       fanId,
       () => _repository.setFanMode(fanId, FanModeData.automatic),
       successMessage: '${fan.displayName} is back in automatic mode.',
+      onActionApplied: () => _deactivateManualLease(fanId),
     );
   }
 
@@ -124,6 +170,7 @@ class MonitorController extends Notifier<MonitorState> {
       fanId,
       () => _repository.setFanTargetRpm(fanId, targetRpm),
       successMessage: '${fan.displayName} target set to $targetRpm RPM.',
+      onActionApplied: () => _activateManualLease(fanId),
     );
   }
 
@@ -131,15 +178,29 @@ class MonitorController extends Notifier<MonitorState> {
     String fanId,
     Future<void> Function() action, {
     required String successMessage,
+    void Function()? onActionApplied,
   }) async {
     _clearTransientNotice();
+    if (_isDisposed) {
+      return;
+    }
+
     state = state.copyWith(
       activeFanCommandIds: {...state.activeFanCommandIds, fanId},
     );
 
     try {
       await action();
+      if (_isDisposed) {
+        return;
+      }
+
+      onActionApplied?.call();
       final refreshSucceeded = await refresh(showSpinner: false);
+      if (_isDisposed) {
+        return;
+      }
+
       state = state.copyWith(
         activeFanCommandIds: _removeActiveFanCommandId(fanId),
       );
@@ -154,6 +215,10 @@ class MonitorController extends Notifier<MonitorState> {
         ),
       );
     } catch (error) {
+      if (_isDisposed) {
+        return;
+      }
+
       state = state.copyWith(
         activeFanCommandIds: _removeActiveFanCommandId(fanId),
       );
@@ -171,6 +236,10 @@ class MonitorController extends Notifier<MonitorState> {
   }
 
   void _showTransientNotice(MonitorNotice notice) {
+    if (_isDisposed) {
+      return;
+    }
+
     _transientNoticeTimer?.cancel();
     state = state.copyWith(transientNotice: notice);
     _transientNoticeTimer = Timer(
@@ -182,6 +251,9 @@ class MonitorController extends Notifier<MonitorState> {
   void _clearTransientNotice() {
     _transientNoticeTimer?.cancel();
     _transientNoticeTimer = null;
+    if (_isDisposed) {
+      return;
+    }
     state = state.copyWith(transientNotice: null);
   }
 
@@ -199,5 +271,71 @@ class MonitorController extends Notifier<MonitorState> {
     final activeFanCommandIds = {...state.activeFanCommandIds};
     activeFanCommandIds.remove(fanId);
     return activeFanCommandIds;
+  }
+
+  void _activateManualLease(String fanId) {
+    _manualLeaseFanIds.add(fanId);
+    _syncManualLeaseHeartbeat();
+  }
+
+  void _deactivateManualLease(String fanId) {
+    _manualLeaseFanIds.remove(fanId);
+    _syncManualLeaseHeartbeat();
+  }
+
+  void _pruneManualLeaseFanIds(HardwareSnapshotData snapshot) {
+    final manualFanIds = snapshot.fanReadings
+        .where((fan) => fan.normalizedMode == FanModeData.manual)
+        .map((fan) => fan.id)
+        .whereType<String>()
+        .toSet();
+
+    _manualLeaseFanIds.removeWhere((fanId) => !manualFanIds.contains(fanId));
+    _syncManualLeaseHeartbeat();
+  }
+
+  void _syncManualLeaseHeartbeat() {
+    if (_isDisposed) {
+      return;
+    }
+
+    _manualLeaseHeartbeatTimer?.cancel();
+    _manualLeaseHeartbeatTimer = null;
+
+    if (_manualLeaseFanIds.isEmpty) {
+      return;
+    }
+
+    _manualLeaseHeartbeatTimer = Timer.periodic(
+      _manualLeaseHeartbeatInterval,
+      (_) => unawaited(_renewManualLeases()),
+    );
+  }
+
+  Future<void> _renewManualLeases() async {
+    if (_isDisposed ||
+        _manualLeaseRenewalInFlight ||
+        _manualLeaseFanIds.isEmpty) {
+      return;
+    }
+
+    _manualLeaseRenewalInFlight = true;
+    try {
+      final fanIds = List<String>.of(_manualLeaseFanIds);
+      for (final fanId in fanIds) {
+        if (_isDisposed) {
+          return;
+        }
+
+        try {
+          await _repository.renewManualFanLease(fanId);
+        } catch (_) {
+          _manualLeaseFanIds.remove(fanId);
+        }
+      }
+    } finally {
+      _manualLeaseRenewalInFlight = false;
+      _syncManualLeaseHeartbeat();
+    }
   }
 }

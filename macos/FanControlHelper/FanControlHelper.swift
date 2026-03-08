@@ -26,7 +26,7 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
   init(
     controller: FanControlControlling?,
     controllerError: AppleSMCFanControlError?,
-    manualLeaseDuration: DispatchTimeInterval = .seconds(15),
+    manualLeaseDuration: DispatchTimeInterval = .seconds(90),
     logger: @escaping Logger = { message in
       NSLog("%@", message)
     }
@@ -98,6 +98,18 @@ final class FanControlHelperService: NSObject, NSXPCListenerDelegate, FanControl
     } catch {
       reply(String(describing: error))
     }
+  }
+
+  func renewManualLease(
+    _ fanIndex: Int,
+    withReply reply: @escaping (String?) -> Void
+  ) {
+    guard manualLeaseController.renew(for: fanIndex) else {
+      reply("Manual fan control lease is not active for fan \(fanIndex).")
+      return
+    }
+
+    reply(nil)
   }
 
   private func resolvedController() throws -> FanControlControlling {

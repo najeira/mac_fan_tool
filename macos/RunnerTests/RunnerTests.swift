@@ -139,6 +139,29 @@ final class RunnerTests: XCTestCase {
     XCTAssertEqual(received?.targetRpm, 2450)
   }
 
+  func testRenewManualLeaseUsesHelperRenewCommand() throws {
+    var renewedFanIndex: Int?
+    let remote = FakeFanControlRemote(
+      setFanModeHandler: { _, _, reply in
+        reply(nil)
+      },
+      renewManualLeaseHandler: { fanIndex, reply in
+        renewedFanIndex = fanIndex
+        reply(nil)
+      }
+    )
+    let connection = FakeFanControlConnection(remote: remote)
+    let client = FanControlHelperClient(
+      commandTimeout: .seconds(1),
+      environmentResolver: { testEnvironment },
+      connectionFactory: { _ in connection },
+      serviceReadinessChecker: NoOpServiceReadinessChecker()
+    )
+
+    XCTAssertNoThrow(try client.renewManualLease(fanId: "fan-1"))
+    XCTAssertEqual(renewedFanIndex, 1)
+  }
+
   func testAppleSMCFanControllerRejectsOutOfRangeTargetsWithoutWriting() {
     let smc = FakeAppleSMC(
       numericValues: [
@@ -309,6 +332,37 @@ final class RunnerTests: XCTestCase {
     wait(for: [unexpectedExpiry, leaseWindowElapsed], timeout: 1.0)
   }
 
+  func testManualFanLeaseControllerRenewExtendsArmedLease() {
+    let unexpectedEarlyExpiry = expectation(description: "lease should not expire early")
+    unexpectedEarlyExpiry.isInverted = true
+    let earlyLeaseWindowElapsed = expectation(description: "early lease window elapsed")
+    let renewedLeaseExpired = expectation(description: "renewed lease expired")
+    var renewalWindowElapsed = false
+
+    let leaseController = ManualFanLeaseController(
+      duration: DispatchTimeInterval.milliseconds(50),
+      queue: DispatchQueue(label: "RunnerTests.manualLease.renew")
+    ) { _ in
+      if renewalWindowElapsed {
+        renewedLeaseExpired.fulfill()
+      } else {
+        unexpectedEarlyExpiry.fulfill()
+      }
+    }
+
+    leaseController.arm(for: 0)
+    DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(25)) {
+      XCTAssertTrue(leaseController.renew(for: 0))
+    }
+    DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(60)) {
+      renewalWindowElapsed = true
+      earlyLeaseWindowElapsed.fulfill()
+    }
+
+    wait(for: [unexpectedEarlyExpiry, earlyLeaseWindowElapsed], timeout: 0.08)
+    wait(for: [renewedLeaseExpired], timeout: 1.0)
+  }
+
   func testHardwareSensorBridgeSupportReturnsEmptyForMissingClient() {
     XCTAssertTrue(HardwareSensorBridgeSupport.temperatureValuesForSystemClient(nil).isEmpty)
   }
@@ -341,16 +395,20 @@ private final class FakeFanControlConnection: FanControlXPCConnection {
 private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
   typealias FanModeHandler = (Int, Int, @escaping (String?) -> Void) -> Void
   typealias ApplyManualTargetHandler = (Int, Int, @escaping (String?) -> Void) -> Void
+  typealias RenewManualLeaseHandler = (Int, @escaping (String?) -> Void) -> Void
 
   private let setFanModeHandler: FanModeHandler
   private let applyManualTargetRpmHandler: ApplyManualTargetHandler
+  private let renewManualLeaseHandler: RenewManualLeaseHandler
 
   init(
     setFanModeHandler: @escaping FanModeHandler,
-    applyManualTargetRpmHandler: @escaping ApplyManualTargetHandler = { _, _, reply in reply(nil) }
+    applyManualTargetRpmHandler: @escaping ApplyManualTargetHandler = { _, _, reply in reply(nil) },
+    renewManualLeaseHandler: @escaping RenewManualLeaseHandler = { _, reply in reply(nil) }
   ) {
     self.setFanModeHandler = setFanModeHandler
     self.applyManualTargetRpmHandler = applyManualTargetRpmHandler
+    self.renewManualLeaseHandler = renewManualLeaseHandler
   }
 
   func setFanMode(
@@ -367,6 +425,13 @@ private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
     withReply reply: @escaping (String?) -> Void
   ) {
     applyManualTargetRpmHandler(fanIndex, targetRpm, reply)
+  }
+
+  func renewManualLease(
+    _ fanIndex: Int,
+    withReply reply: @escaping (String?) -> Void
+  ) {
+    renewManualLeaseHandler(fanIndex, reply)
   }
 }
 

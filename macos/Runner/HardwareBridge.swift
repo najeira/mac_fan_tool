@@ -728,6 +728,10 @@ private final class AppleSiliconHardwareMonitor {
     )
   }
 
+  func renewManualFanLease(fanId: String) throws {
+    try FanControlHelperClient.shared.renewManualLease(fanId: fanId)
+  }
+
   private func readSensors() -> [SensorReadingData] {
     guard smc != nil else {
       return []
@@ -1331,6 +1335,24 @@ final class HardwareBridge: HardwareHostApi {
         code: "fan-control",
         message: "Fan target update failed: \(error)",
         details: "\(fanId):\(targetRpm)"
+      )
+    }
+  }
+
+  func renewManualFanLease(fanId: String) throws {
+    do {
+      try monitor.renewManualFanLease(fanId: fanId)
+    } catch let error as FanControlHelperClientError {
+      throw PigeonError(
+        code: "fan-control",
+        message: error.message,
+        details: fanId
+      )
+    } catch {
+      throw PigeonError(
+        code: "fan-control",
+        message: "Manual fan lease renewal failed: \(error)",
+        details: fanId
       )
     }
   }
