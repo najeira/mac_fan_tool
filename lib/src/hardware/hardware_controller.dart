@@ -13,7 +13,7 @@ final monitorControllerProvider =
     NotifierProvider<MonitorController, MonitorState>(MonitorController.new);
 
 final transientNoticeDurationProvider = Provider<Duration>((ref) {
-  return const Duration(seconds: 4);
+  return const Duration(seconds: 30);
 });
 
 final manualLeaseHeartbeatIntervalProvider = Provider<Duration>((ref) {
