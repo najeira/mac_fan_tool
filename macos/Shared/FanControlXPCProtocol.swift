@@ -250,13 +250,25 @@ private struct FanTargetSnapshot {
 
 /// Apple Silicon の AppleSMC を通じてファンモードと目標 RPM を安全に更新します。
 final class AppleSMCFanController: FanControlControlling {
+  private enum TargetWriteVerification {
+    static let maxWriteAttempts = 3
+    static let readbackPollCount = 5
+    static let readbackPollInterval: TimeInterval = 0.1
+  }
+
   private let smc: AppleSMCControlling
   private let platform: FanControlPlatformChecking
+  private let sleep: (TimeInterval) -> Void
 
   /// SMC 抽象化とプラットフォーム判定を注入してテスト可能な制御器を構築します。
-  init(smc: AppleSMCControlling, platform: FanControlPlatformChecking) {
+  init(
+    smc: AppleSMCControlling,
+    platform: FanControlPlatformChecking,
+    sleep: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
+  ) {
     self.smc = smc
     self.platform = platform
+    self.sleep = sleep
   }
 
   /// 指定ファンのモードを自動または手動へ変更します。
@@ -286,12 +298,22 @@ final class AppleSMCFanController: FanControlControlling {
     try validateWritableFanTarget(index: index, targetRpm: targetRpm)
     let modeSnapshot = try captureModeSnapshot(for: index)
     let targetSnapshot = try captureTargetSnapshot(for: index)
-    try performFanWrite {
-      try writeMode(.manual, using: modeSnapshot.capabilities)
-      try writeTarget(targetRpm, for: index)
-    } rollback: {
-      try restoreTargetSnapshot(targetSnapshot)
-      try restoreModeSnapshot(modeSnapshot)
+    do {
+      try performFanWrite {
+        try writeMode(.manual, using: modeSnapshot.capabilities)
+        try writeTarget(targetRpm, for: index)
+      } rollback: {
+        try restoreTargetSnapshot(targetSnapshot)
+        try restoreModeSnapshot(modeSnapshot)
+      }
+    } catch let error as AppleSMCFanControlError {
+      guard shouldFallbackToLegacyTargetWrite(after: error) else {
+        throw error
+      }
+
+      // Some Macs accept the target write but reject or lag the combined
+      // manual+target transition. Preserve the pre-88a163 behavior as a fallback.
+      try setFanTargetRpm(index: index, targetRpm: targetRpm)
     }
   }
 
@@ -361,6 +383,15 @@ final class AppleSMCFanController: FanControlControlling {
         maximum: bounds.maximumRpm
       )
     }
+  }
+
+  /// atomic manual apply が verification で落ちたときだけ legacy target-only 経路を試します。
+  private func shouldFallbackToLegacyTargetWrite(after error: AppleSMCFanControlError) -> Bool {
+    if case .verificationFailed = error {
+      return true
+    }
+
+    return false
   }
 
   /// ファン書き込み処理を実行し、失敗時は呼び出し元が渡したロールバックを試行します。
@@ -521,28 +552,59 @@ final class AppleSMCFanController: FanControlControlling {
       throw AppleSMCFanControlError.targetControlUnavailable(index)
     }
 
-    try smc.writeNumeric(Double(targetRpm), for: targetKey)
-    try verifyTarget(targetRpm, for: targetKey)
+    try writeAndVerifyTarget(targetRpm, for: targetKey)
   }
 
   /// 退避しておいた目標 RPM を元の値へ戻します。
   private func restoreTargetSnapshot(_ snapshot: FanTargetSnapshot) throws {
-    try smc.writeNumeric(Double(snapshot.value), for: snapshot.key)
-    try verifyTarget(snapshot.value, for: snapshot.key)
+    try writeAndVerifyTarget(snapshot.value, for: snapshot.key)
   }
 
-  /// 目標 RPM を読み戻し、書き込み結果が一致しているか確認します。
-  private func verifyTarget(_ expectedTargetRpm: Int, for key: String) throws {
-    guard let actualValue = smc.value(for: key, allowZero: true) else {
-      throw AppleSMCFanControlError.stateSnapshotUnavailable(key)
+  /// 目標 RPM 書き込みはモード切替直後だと反映が遅れることがあるため、短時間だけ再確認します。
+  private func writeAndVerifyTarget(_ expectedTargetRpm: Int, for key: String) throws {
+    var lastActualTargetRpm: Int?
+
+    for attempt in 0..<TargetWriteVerification.maxWriteAttempts {
+      try smc.writeNumeric(Double(expectedTargetRpm), for: key)
+      if let actualTargetRpm = try waitForTargetReadback(expectedTargetRpm, for: key) {
+        lastActualTargetRpm = actualTargetRpm
+      } else {
+        return
+      }
+
+      if attempt + 1 < TargetWriteVerification.maxWriteAttempts {
+        sleep(TargetWriteVerification.readbackPollInterval)
+      }
     }
 
-    let actualTargetRpm = Int(actualValue.rounded())
-    guard actualTargetRpm == expectedTargetRpm else {
-      throw AppleSMCFanControlError.verificationFailed(
-        "expected \(key) to read back \(expectedTargetRpm) RPM, but got \(actualTargetRpm) RPM"
-      )
+    throw AppleSMCFanControlError.verificationFailed(
+      "expected \(key) to read back \(expectedTargetRpm) RPM, but got \(lastActualTargetRpm ?? 0) RPM"
+    )
+  }
+
+  /// 一定時間ポーリングし、目標 RPM の読み戻しが追いつくか確認します。
+  private func waitForTargetReadback(_ expectedTargetRpm: Int, for key: String) throws -> Int? {
+    var lastActualTargetRpm: Int?
+
+    for pollIndex in 0..<TargetWriteVerification.readbackPollCount {
+      guard let actualValue = smc.value(for: key, allowZero: true) else {
+        throw AppleSMCFanControlError.stateSnapshotUnavailable(key)
+      }
+
+      let actualTargetRpm = Int(actualValue.rounded())
+      if actualTargetRpm == expectedTargetRpm {
+        return nil
+      }
+
+      lastActualTargetRpm = actualTargetRpm
+
+      let shouldContinuePolling = pollIndex + 1 < TargetWriteVerification.readbackPollCount
+      if shouldContinuePolling {
+        sleep(TargetWriteVerification.readbackPollInterval)
+      }
     }
+
+    return lastActualTargetRpm
   }
 
   /// 整数キーを必須値として読み取り、欠損時は状態取得失敗を返します。

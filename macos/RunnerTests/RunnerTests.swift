@@ -350,6 +350,58 @@ final class RunnerTests: XCTestCase {
     XCTAssertEqual(smc.integerValues["FS! "], 0)
   }
 
+  func testAppleSMCFanControllerRetriesTargetWriteWhenFirstReadbackStaysStale() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+        "F0Ac": 2200,
+        "F0Mn": 1200,
+        "F0Mx": 4000,
+        "F0Tg": 1000,
+      ],
+      integerValues: [
+        "F0Md": 0,
+      ],
+      numericWritableKeys: ["F0Tg"],
+      integerWritableKeys: ["F0Md"]
+    )
+    var targetWrites = 0
+    smc.integerWriteBehaviors["F0Md"] = { _ in 0 }
+    smc.numericWriteBehaviors["F0Tg"] = { value in
+      targetWrites += 1
+      return targetWrites == 1 ? 1000 : value
+    }
+    let controller = makeTestAppleSMCFanController(smc: smc)
+
+    XCTAssertNoThrow(try controller.applyManualTargetRpm(index: 0, targetRpm: 2100))
+    XCTAssertEqual(targetWrites, 2)
+    XCTAssertEqual(smc.numericValues["F0Tg"], 2100)
+  }
+
+  func testAppleSMCFanControllerFallsBackToLegacyTargetWriteWhenAtomicApplyVerificationFails() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+        "F0Ac": 2200,
+        "F0Mn": 1200,
+        "F0Mx": 4000,
+        "F0Tg": 1000,
+      ],
+      integerValues: [
+        "F0Md": 0,
+        "FS! ": 0,
+      ],
+      numericWritableKeys: ["F0Tg"],
+      integerWritableKeys: ["F0Md", "FS! "]
+    )
+    smc.integerWriteBehaviors["FS! "] = { _ in 0 }
+    let controller = makeTestAppleSMCFanController(smc: smc)
+
+    XCTAssertNoThrow(try controller.applyManualTargetRpm(index: 0, targetRpm: 2100))
+    XCTAssertEqual(smc.numericValues["F0Tg"], 2100)
+    XCTAssertEqual(smc.integerValues["FS! "], 0)
+  }
+
   func testAppleSMCFanControllerDoesNotTreatModeKeyOnlyRollbackReadbackAsFailure() {
     let smc = FakeAppleSMC(
       numericValues: [
@@ -365,16 +417,11 @@ final class RunnerTests: XCTestCase {
       numericWritableKeys: ["F0Tg"],
       integerWritableKeys: ["F0Md"]
     )
-    var targetWrites = 0
     smc.integerWriteBehaviors["F0Md"] = { _ in 0 }
     smc.numericWriteBehaviors["F0Tg"] = { value in
-      targetWrites += 1
-      return targetWrites == 1 ? value + 75 : value
+      value == 2450 ? value + 75 : value
     }
-    let controller = AppleSMCFanController(
-      smc: smc,
-      platform: TestFanControlPlatform(isAppleSilicon: true)
-    )
+    let controller = makeTestAppleSMCFanController(smc: smc)
 
     XCTAssertThrowsError(try controller.applyManualTargetRpm(index: 0, targetRpm: 2450)) { error in
       guard let fanError = error as? AppleSMCFanControlError else {
@@ -405,15 +452,10 @@ final class RunnerTests: XCTestCase {
       numericWritableKeys: ["F0Tg"],
       integerWritableKeys: ["F0Md", "FS! "]
     )
-    var targetWrites = 0
     smc.numericWriteBehaviors["F0Tg"] = { value in
-      targetWrites += 1
-      return targetWrites == 1 ? value + 75 : value
+      value == 2450 ? value + 75 : value
     }
-    let controller = AppleSMCFanController(
-      smc: smc,
-      platform: TestFanControlPlatform(isAppleSilicon: true)
-    )
+    let controller = makeTestAppleSMCFanController(smc: smc)
 
     XCTAssertThrowsError(try controller.applyManualTargetRpm(index: 0, targetRpm: 2450)) { error in
       guard let fanError = error as? AppleSMCFanControlError else {
@@ -446,10 +488,8 @@ final class RunnerTests: XCTestCase {
       numericWritableKeys: ["F0Tg"],
       integerWritableKeys: ["F0Md", "FS! "]
     )
-    var targetWrites = 0
     smc.numericWriteBehaviors["F0Tg"] = { value in
-      targetWrites += 1
-      if targetWrites == 1 {
+      if value == 2450 {
         return value + 50
       }
 
@@ -458,10 +498,7 @@ final class RunnerTests: XCTestCase {
         description: "rollback refused"
       )
     }
-    let controller = AppleSMCFanController(
-      smc: smc,
-      platform: TestFanControlPlatform(isAppleSilicon: true)
-    )
+    let controller = makeTestAppleSMCFanController(smc: smc)
 
     XCTAssertThrowsError(try controller.applyManualTargetRpm(index: 0, targetRpm: 2450)) { error in
       guard let fanError = error as? AppleSMCFanControlError else {
@@ -628,6 +665,17 @@ private final class FakeFanControlRemote: NSObject, FanControlXPCProtocol {
 
 private struct TestFanControlPlatform: FanControlPlatformChecking {
   let isAppleSilicon: Bool
+}
+
+private func makeTestAppleSMCFanController(
+  smc: FakeAppleSMC,
+  isAppleSilicon: Bool = true
+) -> AppleSMCFanController {
+  AppleSMCFanController(
+    smc: smc,
+    platform: TestFanControlPlatform(isAppleSilicon: isAppleSilicon),
+    sleep: { _ in }
+  )
 }
 
 private final class FakeAppleSMC: AppleSMCControlling {

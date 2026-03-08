@@ -154,6 +154,7 @@ dmg-verify-stapled: dmg-staple
   spctl -a -t open --context context:primary-signature -v "{{release_dmg_file}}"
 
 install-release:
+  rm -rf "{{installed_app_file}}"
   ditto "{{app_file}}" "{{installed_app_file}}"
 
 verify-installed:
