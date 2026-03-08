@@ -199,113 +199,56 @@ private final class AppleSMCConnection: AppleSMCControlling {
 
   /// 指定した SMC キーの数値を読み取り、必要に応じてゼロ値を無効扱いにします。
   func value(for key: String, allowZero: Bool = false) -> Double? {
-    lock.lock()
-    defer {
-      lock.unlock()
+    readOptionalValue(for: key, allowZero: allowZero) { value in
+      decode(value: value)
     }
-
-    guard let value = readValue(for: key) else {
-      return nil
-    }
-
-    if !allowZero && value.bytes.prefix(Int(value.dataSize)).allSatisfy({ $0 == 0 }) {
-      return nil
-    }
-
-    return decode(value: value)
   }
 
   /// 指定した SMC キーの整数値を読み取ります。
   func integerValue(for key: String, allowZero: Bool = false) -> UInt32? {
-    lock.lock()
-    defer {
-      lock.unlock()
+    try? readOptionalValue(for: key, allowZero: allowZero) { value in
+      try decodeInteger(value: value)
     }
-
-    guard let value = readValue(for: key) else {
-      return nil
-    }
-
-    if !allowZero && isZero(value) {
-      return nil
-    }
-
-    return try? decodeInteger(value: value)
   }
 
   /// 指定した SMC キーが数値書き込みに対応しているかを確認します。
   func canWriteNumeric(for key: String) -> Bool {
-    lock.lock()
-    defer {
-      lock.unlock()
-    }
-
-    guard let value = readValue(for: key) else {
-      return false
-    }
-
-    return supportsNumericEncoding(value: value)
+    readOptionalValue(for: key) { value in
+      supportsNumericEncoding(value: value)
+    } ?? false
   }
 
   /// 指定した SMC キーが整数書き込みに対応しているかを確認します。
   func canWriteInteger(for key: String) -> Bool {
-    lock.lock()
-    defer {
-      lock.unlock()
-    }
-
-    guard let value = readValue(for: key) else {
-      return false
-    }
-
-    return supportsIntegerEncoding(value: value)
+    readOptionalValue(for: key) { value in
+      supportsIntegerEncoding(value: value)
+    } ?? false
   }
 
   /// 指定した SMC キーへ数値を書き込みます。
   func writeNumeric(_ numericValue: Double, for key: String) throws {
-    lock.lock()
-    defer {
-      lock.unlock()
+    try withRequiredValue(for: key) { value in
+      let bytes = try encodeNumeric(numericValue, using: value)
+      try writeLocked(bytes, using: value)
     }
-
-    guard let value = readValue(for: key) else {
-      throw AppleSMCFanControlError.smcKeyUnavailable(key)
-    }
-
-    let bytes = try encodeNumeric(numericValue, using: value)
-    try writeLocked(bytes, using: value)
   }
 
   /// 指定した SMC キーへ整数値を書き込みます。
   func writeInteger(_ integerValue: UInt32, for key: String) throws {
-    lock.lock()
-    defer {
-      lock.unlock()
+    try withRequiredValue(for: key) { value in
+      let bytes = try encodeInteger(integerValue, using: value)
+      try writeLocked(bytes, using: value)
     }
-
-    guard let value = readValue(for: key) else {
-      throw AppleSMCFanControlError.smcKeyUnavailable(key)
-    }
-
-    let bytes = try encodeInteger(integerValue, using: value)
-    try writeLocked(bytes, using: value)
   }
 
   /// 現在の整数値を読み取って変換し、その結果を書き戻します。
   func updateInteger(for key: String, transform: (UInt32) -> UInt32) throws {
-    lock.lock()
-    defer {
-      lock.unlock()
+    try withRequiredValue(for: key) { value in
+      let current = try decodeInteger(value: value)
+      let next = transform(current)
+      let bytes = try encodeInteger(next, using: value)
+      try writeLocked(bytes, using: value)
     }
-
-    guard let value = readValue(for: key) else {
-      throw AppleSMCFanControlError.smcKeyUnavailable(key)
-    }
-
-    let current = try decodeInteger(value: value)
-    let next = transform(current)
-    let bytes = try encodeInteger(next, using: value)
-    try writeLocked(bytes, using: value)
   }
 
   private func readValue(for key: String) -> SMCValue? {
@@ -384,6 +327,42 @@ private final class AppleSMCConnection: AppleSMCControlling {
 
   private func isZero(_ value: SMCValue) -> Bool {
     value.bytes.prefix(Int(value.dataSize)).allSatisfy { $0 == 0 }
+  }
+
+  private func withLock<T>(_ body: () throws -> T) rethrows -> T {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    return try body()
+  }
+
+  private func readOptionalValue<T>(
+    for key: String,
+    allowZero: Bool = true,
+    _ transform: (SMCValue) throws -> T?
+  ) rethrows -> T? {
+    try withLock {
+      guard let value = readValue(for: key), allowZero || !isZero(value) else {
+        return nil
+      }
+
+      return try transform(value)
+    }
+  }
+
+  private func withRequiredValue<T>(
+    for key: String,
+    _ body: (SMCValue) throws -> T
+  ) throws -> T {
+    try withLock {
+      guard let value = readValue(for: key) else {
+        throw AppleSMCFanControlError.smcKeyUnavailable(key)
+      }
+
+      return try body(value)
+    }
   }
 
   private func writeLocked(_ bytes: [UInt8], using value: SMCValue) throws {

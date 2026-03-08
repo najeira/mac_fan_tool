@@ -332,66 +332,30 @@ private final class AppleSMCConnection {
 
   /// 指定した SMC キーの数値を読み取ります。
   func value(for key: String, allowZero: Bool = false) -> Double? {
-    lock.lock()
-    defer {
-      lock.unlock()
+    readOptionalValue(for: key, allowZero: allowZero) { value in
+      decode(value: value)
     }
-
-    guard let value = readValue(for: key) else {
-      return nil
-    }
-
-    if !allowZero && value.bytes.prefix(Int(value.dataSize)).allSatisfy({ $0 == 0 }) {
-      return nil
-    }
-
-    return decode(value: value)
   }
 
   /// 指定した SMC キーの整数値を読み取ります。
   func integerValue(for key: String, allowZero: Bool = false) -> UInt32? {
-    lock.lock()
-    defer {
-      lock.unlock()
+    try? readOptionalValue(for: key, allowZero: allowZero) { value in
+      try decodeInteger(value: value)
     }
-
-    guard let value = readValue(for: key) else {
-      return nil
-    }
-
-    if !allowZero && isZero(value) {
-      return nil
-    }
-
-    return try? decodeInteger(value: value)
   }
 
   /// 指定した SMC キーが数値書き込みに対応しているかを返します。
   func canWriteNumeric(for key: String) -> Bool {
-    lock.lock()
-    defer {
-      lock.unlock()
-    }
-
-    guard let value = readValue(for: key) else {
-      return false
-    }
-
-    return supportsNumericEncoding(value: value)
+    readOptionalValue(for: key) { value in
+      supportsNumericEncoding(value: value)
+    } ?? false
   }
 
   /// 指定した SMC キーが整数書き込みに対応しているかを返します。
   func canWriteInteger(for key: String) -> Bool {
-    lock.lock()
-    defer {
-      lock.unlock()
-    }
-
-    guard let value = readValue(for: key) else {
-      return false
-    }
-
-    return supportsIntegerEncoding(value: value)
+    readOptionalValue(for: key) { value in
+      supportsIntegerEncoding(value: value)
+    } ?? false
   }
 
   private func readValue(for key: String) -> SMCValue? {
@@ -462,6 +426,29 @@ private final class AppleSMCConnection {
 
   private func isZero(_ value: SMCValue) -> Bool {
     value.bytes.prefix(Int(value.dataSize)).allSatisfy { $0 == 0 }
+  }
+
+  private func withLock<T>(_ body: () throws -> T) rethrows -> T {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+
+    return try body()
+  }
+
+  private func readOptionalValue<T>(
+    for key: String,
+    allowZero: Bool = true,
+    _ transform: (SMCValue) throws -> T?
+  ) rethrows -> T? {
+    try withLock {
+      guard let value = readValue(for: key), allowZero || !isZero(value) else {
+        return nil
+      }
+
+      return try transform(value)
+    }
   }
 
   private func decodeInteger(value: SMCValue) throws -> UInt32 {
