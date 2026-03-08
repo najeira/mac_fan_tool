@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import ServiceManagement
 
@@ -315,8 +316,21 @@ final class FanControlHelperClient {
       )
     }
 
+    let helperFingerprint: String
+    do {
+      helperFingerprint = try bundledHelperFingerprint(
+        forExecutableAt: helperExecutableURL,
+        signature: helperSignature
+      )
+    } catch {
+      throw FanControlHelperClientError.configurationInvalid(
+        "macOS could not hash the bundled privileged helper."
+      )
+    }
+
     return ResolvedEnvironment(
       configuration: configuration,
+      helperFingerprint: helperFingerprint,
       helperRequirement: codeSigningRequirement(
         identifier: configuration.helperBundleIdentifier,
         teamIdentifier: helperTeamIdentifier
@@ -383,6 +397,21 @@ final class FanControlHelperClient {
         "macOS could not inspect the code signature."
       )
     }
+  }
+
+  /// 同梱 helper の内容が変わったことを検知するため、署名情報と実バイナリから fingerprint を作ります。
+  private func bundledHelperFingerprint(
+    forExecutableAt url: URL,
+    signature: CodeSignatureDetails
+  ) throws -> String {
+    let executableData = try Data(contentsOf: url, options: .mappedIfSafe)
+    let digest = SHA256.hash(data: executableData)
+    let digestHex = digest.map { String(format: "%02x", $0) }.joined()
+    return [
+      signature.identifier ?? "unknown-identifier",
+      signature.teamIdentifier ?? "unknown-team",
+      digestHex,
+    ].joined(separator: "|")
   }
 
   /// ヘルパー接続時に使うコード署名要件文字列を生成します。
@@ -455,6 +484,14 @@ protocol FanControlServiceRecovering {
 }
 
 private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking {
+  private let fingerprintStore: HelperRegistrationFingerprintStoring
+
+  init(
+    fingerprintStore: HelperRegistrationFingerprintStoring = UserDefaultsHelperRegistrationFingerprintStore()
+  ) {
+    self.fingerprintStore = fingerprintStore
+  }
+
   /// ServiceManagement の登録・承認状態を検査し、必要なら登録処理を進めます。
   func ensureReady(environment: ResolvedEnvironment) throws {
     guard #available(macOS 13.0, *) else {
@@ -468,14 +505,23 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
   @available(macOS 13.0, *)
   private func ensureServiceReady(environment: ResolvedEnvironment) throws {
     let service = environment.service
+    let status = settledServiceStatus(for: service)
 
-    switch settledServiceStatus(for: service) {
+    if status == .enabled && shouldRefreshRegistration(environment: environment) {
+      try refreshRegistration(environment: environment)
+      recordRegisteredFingerprint(environment)
+      return
+    }
+
+    switch status {
     case .enabled:
+      recordRegisteredFingerprint(environment)
       return
 
     case .notRegistered, .notFound:
       try registerService(environment: environment, allowReset: true)
       try ensureRegisteredStatus(environment: environment, allowReset: true)
+      recordRegisteredFingerprint(environment)
 
     case .requiresApproval:
       throw FanControlHelperClientError.requiresApproval
@@ -485,6 +531,22 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
         message: "The privileged helper returned an unknown registration state."
       )
     }
+  }
+
+  /// app bundle 内 helper が更新されていれば、登録済み helper も入れ替えます。
+  @available(macOS 13.0, *)
+  private func shouldRefreshRegistration(environment: ResolvedEnvironment) -> Bool {
+    fingerprintStore.fingerprint(for: environment.configuration.appBundleIdentifier)
+      != environment.helperFingerprint
+  }
+
+  /// 登録済み helper fingerprint を保存し、次回起動時に stale 判定できるようにします。
+  @available(macOS 13.0, *)
+  private func recordRegisteredFingerprint(_ environment: ResolvedEnvironment) {
+    fingerprintStore.setFingerprint(
+      environment.helperFingerprint,
+      for: environment.configuration.appBundleIdentifier
+    )
   }
 
   /// 必要に応じて登録リセットを挟みつつ、特権ヘルパーを登録します。
@@ -516,7 +578,7 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
   @available(macOS 13.0, *)
   private func resetRegistration(environment: ResolvedEnvironment) throws {
     do {
-      try environment.service.unregister()
+      try unregisterServiceAndWait(environment.service)
     } catch {
       let nsError = error as NSError
       if nsError.code != kSMErrorJobNotFound {
@@ -525,6 +587,14 @@ private struct SMAppServiceReadinessChecker: FanControlServiceReadinessChecking 
         )
       }
     }
+  }
+
+  /// 同梱 helper が更新されている場合に、登録済み helper を強制的に差し替えます。
+  @available(macOS 13.0, *)
+  private func refreshRegistration(environment: ResolvedEnvironment) throws {
+    try resetRegistration(environment: environment)
+    try registerService(environment: environment, allowReset: false)
+    try ensureRegisteredStatus(environment: environment, allowReset: false)
   }
 
   /// 登録直後の状態が実際に利用可能かを再確認します。
@@ -628,7 +698,7 @@ private struct SMAppServiceRecovery: FanControlServiceRecovering {
     }
 
     do {
-      try service.unregister()
+      try unregisterServiceAndWait(service)
     } catch {
       let nsError = error as NSError
       if nsError.code != kSMErrorJobNotFound {
@@ -683,6 +753,35 @@ private struct SMAppServiceRecovery: FanControlServiceRecovering {
 }
 
 @available(macOS 13.0, *)
+private func unregisterServiceAndWait(
+  _ service: SMAppService,
+  timeout: DispatchTimeInterval = .seconds(5)
+) throws {
+  let semaphore = DispatchSemaphore(value: 0)
+  var completionError: NSError?
+
+  service.unregister { error in
+    completionError = error as NSError?
+    semaphore.signal()
+  }
+
+  if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+    throw NSError(
+      domain: NSOSStatusErrorDomain,
+      code: kSMErrorServiceUnavailable,
+      userInfo: [
+        NSLocalizedDescriptionKey:
+          "Timed out while waiting for the privileged helper to unregister.",
+      ]
+    )
+  }
+
+  if let completionError {
+    throw completionError
+  }
+}
+
+@available(macOS 13.0, *)
 private func settledServiceStatus(
   for service: SMAppService,
   maxPolls: Int = 20,
@@ -716,11 +815,39 @@ private enum HelperServiceStatus {
 /// 特権ヘルパー接続に必要な設定と署名要件を束ねた実行環境です。
 struct ResolvedEnvironment {
   let configuration: FanControlHelperConfiguration
+  let helperFingerprint: String
   let helperRequirement: String
 
   @available(macOS 13.0, *)
   var service: SMAppService {
     SMAppService.daemon(plistName: FanControlHelperConfiguration.launchDaemonPlistName)
+  }
+}
+
+private protocol HelperRegistrationFingerprintStoring {
+  func fingerprint(for appBundleIdentifier: String) -> String?
+  func setFingerprint(_ fingerprint: String, for appBundleIdentifier: String)
+}
+
+private struct UserDefaultsHelperRegistrationFingerprintStore:
+  HelperRegistrationFingerprintStoring
+{
+  private let defaults: UserDefaults
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+  }
+
+  func fingerprint(for appBundleIdentifier: String) -> String? {
+    defaults.string(forKey: storageKey(for: appBundleIdentifier))
+  }
+
+  func setFingerprint(_ fingerprint: String, for appBundleIdentifier: String) {
+    defaults.set(fingerprint, forKey: storageKey(for: appBundleIdentifier))
+  }
+
+  private func storageKey(for appBundleIdentifier: String) -> String {
+    "FanControlHelperClient.registeredHelperFingerprint.\(appBundleIdentifier)"
   }
 }
 

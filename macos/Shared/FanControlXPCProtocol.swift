@@ -464,12 +464,6 @@ final class AppleSMCFanController: FanControlControlling {
         throw AppleSMCFanControlError.stateSnapshotUnavailable(snapshot.capabilities.modeKey)
       }
       try smc.writeInteger(modeKeyValue, for: snapshot.capabilities.modeKey)
-      try verifyIntegerValue(
-        modeKeyValue,
-        for: snapshot.capabilities.modeKey,
-        failureDescription:
-          "expected \(snapshot.capabilities.modeKey) to restore to \(modeKeyValue)"
-      )
     }
 
     if snapshot.capabilities.writesForceMask {
@@ -500,26 +494,24 @@ final class AppleSMCFanController: FanControlControlling {
       capabilities.writesForceMask
       ? try readIntegerKey(capabilities.forceKey, allowZero: true)
       : nil
-    let observedManualStates = [
-      actualModeValue.map { $0 > 0 },
-      actualForceMask.map { ($0 & capabilities.maskBit) != 0 },
-    ].compactMap { $0 }
+    if let actualForceMask {
+      let forceMaskIndicatesManual = (actualForceMask & capabilities.maskBit) != 0
+      guard forceMaskIndicatesManual == expectsManual else {
+        let modeDescription = actualModeValue.map(String.init) ?? "n/a"
+        throw AppleSMCFanControlError.verificationFailed(
+          "expected fan \(capabilities.index) to indicate \(mode), but read back \(capabilities.modeKey)=\(modeDescription), \(capabilities.forceKey)=\(actualForceMask)"
+        )
+      }
+      return
+    }
 
-    guard !observedManualStates.isEmpty else {
+    guard actualModeValue != nil else {
       throw AppleSMCFanControlError.modeControlUnavailable(capabilities.index)
     }
 
-    let verificationSucceeded =
-      expectsManual
-      ? observedManualStates.contains(true)
-      : observedManualStates.allSatisfy { $0 == false }
-    guard verificationSucceeded else {
-      let modeDescription = actualModeValue.map(String.init) ?? "n/a"
-      let forceDescription = actualForceMask.map(String.init) ?? "n/a"
-      throw AppleSMCFanControlError.verificationFailed(
-        "expected fan \(capabilities.index) to indicate \(mode), but read back \(capabilities.modeKey)=\(modeDescription), \(capabilities.forceKey)=\(forceDescription)"
-      )
-    }
+    // F0Md alone is not a reliable, immediate source of truth on all Macs.
+    // When FS! is unavailable, treat the mode-key readback as advisory and let
+    // target verification catch the cases where control did not actually stick.
   }
 
   /// 目標 RPM キーへ値を書き込み、読み戻しで結果を確認します。

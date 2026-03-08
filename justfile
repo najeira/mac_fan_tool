@@ -164,3 +164,6 @@ verify-installed:
 dist-zip: zip-release
 dist: dist-zip
 dist-dmg: dmg-verify-stapled
+
+kill-helper:
+  sudo launchctl kickstart -k system/com.najeira.macfantool.fancontrol.helper

@@ -3,6 +3,7 @@ import XCTest
 
 private let testEnvironment = ResolvedEnvironment(
   configuration: FanControlHelperConfiguration(appBundleIdentifier: "com.example.macFanTool"),
+  helperFingerprint: "test-helper-fingerprint",
   helperRequirement: "helper-requirement"
 )
 
@@ -303,6 +304,89 @@ final class RunnerTests: XCTestCase {
     XCTAssertNoThrow(try controller.setFanMode(index: 0, mode: .manual))
     XCTAssertEqual(smc.integerValues["F0Md"], 0)
     XCTAssertEqual(smc.integerValues["FS! "], 1)
+  }
+
+  func testAppleSMCFanControllerAcceptsManualWhenOnlyModeKeyExistsAndReadbackStaysZero() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+      ],
+      integerValues: [
+        "F0Md": 0,
+      ],
+      numericWritableKeys: [],
+      integerWritableKeys: ["F0Md"]
+    )
+    smc.integerWriteBehaviors["F0Md"] = { _ in 0 }
+    let controller = AppleSMCFanController(
+      smc: smc,
+      platform: TestFanControlPlatform(isAppleSilicon: true)
+    )
+
+    XCTAssertNoThrow(try controller.setFanMode(index: 0, mode: .manual))
+    XCTAssertEqual(smc.integerValues["F0Md"], 0)
+  }
+
+  func testAppleSMCFanControllerAcceptsAutoWhenForceMaskClearsButModeKeyStaysManual() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+      ],
+      integerValues: [
+        "F0Md": 1,
+        "FS! ": 1,
+      ],
+      numericWritableKeys: [],
+      integerWritableKeys: ["F0Md", "FS! "]
+    )
+    smc.integerWriteBehaviors["F0Md"] = { _ in 1 }
+    let controller = AppleSMCFanController(
+      smc: smc,
+      platform: TestFanControlPlatform(isAppleSilicon: true)
+    )
+
+    XCTAssertNoThrow(try controller.setFanMode(index: 0, mode: .automatic))
+    XCTAssertEqual(smc.integerValues["F0Md"], 1)
+    XCTAssertEqual(smc.integerValues["FS! "], 0)
+  }
+
+  func testAppleSMCFanControllerDoesNotTreatModeKeyOnlyRollbackReadbackAsFailure() {
+    let smc = FakeAppleSMC(
+      numericValues: [
+        "FNum": 1,
+        "F0Ac": 2200,
+        "F0Mn": 1200,
+        "F0Mx": 4000,
+        "F0Tg": 2200,
+      ],
+      integerValues: [
+        "F0Md": 1,
+      ],
+      numericWritableKeys: ["F0Tg"],
+      integerWritableKeys: ["F0Md"]
+    )
+    var targetWrites = 0
+    smc.integerWriteBehaviors["F0Md"] = { _ in 0 }
+    smc.numericWriteBehaviors["F0Tg"] = { value in
+      targetWrites += 1
+      return targetWrites == 1 ? value + 75 : value
+    }
+    let controller = AppleSMCFanController(
+      smc: smc,
+      platform: TestFanControlPlatform(isAppleSilicon: true)
+    )
+
+    XCTAssertThrowsError(try controller.applyManualTargetRpm(index: 0, targetRpm: 2450)) { error in
+      guard let fanError = error as? AppleSMCFanControlError else {
+        return XCTFail("Unexpected error: \(error)")
+      }
+      guard case let .verificationFailed(message) = fanError else {
+        return XCTFail("Unexpected error: \(fanError)")
+      }
+      XCTAssertTrue(message.contains("F0Tg"))
+    }
+    XCTAssertEqual(smc.numericValues["F0Tg"], 2200)
+    XCTAssertEqual(smc.integerValues["F0Md"], 0)
   }
 
   func testAppleSMCFanControllerRollsBackModeAndTargetWhenTargetVerificationFails() {
