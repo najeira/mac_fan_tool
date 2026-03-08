@@ -30,6 +30,8 @@ class MonitorController extends Notifier<MonitorState> {
 
   bool _isDisposed = false;
 
+  // Telemetry can report automatic even while the helper still holds an active
+  // manual lease, so keep lease tracking independent from snapshot mode.
   final Set<String> _manualLeaseFanIds = <String>{};
 
   HardwareRepository get _repository => ref.read(hardwareRepositoryProvider);
@@ -117,7 +119,6 @@ class MonitorController extends Notifier<MonitorState> {
         history: _appendHistory(snapshot),
         errorMessage: null,
       );
-      _pruneManualLeaseFanIds(snapshot);
       return true;
     } catch (error) {
       if (_isDisposed) {
@@ -267,17 +268,6 @@ class MonitorController extends Notifier<MonitorState> {
 
   void _deactivateManualLease(String fanId) {
     _manualLeaseFanIds.remove(fanId);
-    _syncManualLeaseHeartbeat();
-  }
-
-  void _pruneManualLeaseFanIds(HardwareSnapshotData snapshot) {
-    final manualFanIds = snapshot.fanReadings
-        .where((fan) => fan.normalizedMode == FanModeData.manual)
-        .map((fan) => fan.id)
-        .whereType<String>()
-        .toSet();
-
-    _manualLeaseFanIds.removeWhere((fanId) => !manualFanIds.contains(fanId));
     _syncManualLeaseHeartbeat();
   }
 

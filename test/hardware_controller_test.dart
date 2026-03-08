@@ -162,6 +162,38 @@ void main() {
     expect(repository.renewManualLeaseCalls, contains('fan-0'));
   });
 
+  test(
+    'setFanTargetRpm keeps manual lease heartbeats when telemetry still reads automatic',
+    () async {
+      final repository = _FakeHardwareRepository(
+        snapshots: [
+          _sampleSnapshot(),
+          _sampleSnapshot(mode: FanModeData.automatic, targetRpm: 2400),
+        ],
+      );
+      final container = ProviderContainer(
+        overrides: [
+          hardwareRepositoryProvider.overrideWithValue(repository),
+          manualLeaseHeartbeatIntervalProvider.overrideWithValue(
+            const Duration(milliseconds: 10),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(monitorControllerProvider);
+      await _waitForBootstrap(container);
+
+      final controller = container.read(monitorControllerProvider.notifier);
+      final fan = container.read(monitorSnapshotProvider).fanReadings.single;
+
+      await controller.setFanTargetRpm(fan, 2400);
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+
+      expect(repository.renewManualLeaseCalls, contains('fan-0'));
+    },
+  );
+
   test('setFanAutomatic stops manual lease heartbeats', () async {
     final repository = _FakeHardwareRepository(
       snapshots: [
